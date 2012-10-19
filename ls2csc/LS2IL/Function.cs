@@ -1664,23 +1664,57 @@ namespace LS2IL
 
                 //pues.Operand;
                 FlatOperand left = ResolveLValue(pues.Operand, instructions);
-                
+                if (into_lvalue == null)
+                {
+                    into_lvalue = this.AllocateRegister("");
+                }
 
                 FlatOperand left_lvalue = left.GetLValue(this, instructions);
 
                 switch (pues.Kind)
                 {
                     case SyntaxKind.PostIncrementExpression:
+                        instructions.Add(FlatStatement.DUPLICATE(FlatOperand.Immediate(FlatValue.Int32(into_lvalue.OperandIndex)), left));
                         instructions.Add(FlatStatement.ADD(left_lvalue, left, FlatOperand.Immediate(FlatValue.Int32(1))));
                         // TODO: this should be trying to return immediatevalue+1...?
-                        return FlatOperand.Immediate(left_lvalue.ImmediateValue);
+                        return into_lvalue;
                     case SyntaxKind.PostDecrementExpression:
+                        instructions.Add(FlatStatement.DUPLICATE(FlatOperand.Immediate(FlatValue.Int32(into_lvalue.OperandIndex)), left));
                         instructions.Add(FlatStatement.SUB(left_lvalue, left, FlatOperand.Immediate(FlatValue.Int32(1))));
                         // TODO: this should be trying to return immediatevalue-1...?
-                        return FlatOperand.Immediate(left_lvalue.ImmediateValue);
+                        return into_lvalue;
                 }
                 
                 throw new NotImplementedException("postfix unary " + pues.Kind.ToString());
+            }
+            if (node is PrefixUnaryExpressionSyntax)
+            {
+                PrefixUnaryExpressionSyntax pues = (PrefixUnaryExpressionSyntax)node;
+                FlatOperand right = ResolveExpression(pues.Operand, into_lvalue, instructions);
+                FlatOperand left_lvalue;
+                switch (pues.Kind)
+                {
+                    case SyntaxKind.PreIncrementExpression:
+                        left_lvalue = ResolveLValue(pues.Operand, instructions);
+                        instructions.Add(FlatStatement.ADD(left_lvalue.GetLValue(this, instructions), right, FlatOperand.Immediate(FlatValue.Int32(1))));
+                        // TODO: this should be trying to return immediatevalue+1...?
+                        return left_lvalue;
+                    case SyntaxKind.PreDecrementExpression:
+                        left_lvalue = ResolveLValue(pues.Operand, instructions);
+                        instructions.Add(FlatStatement.SUB(left_lvalue.GetLValue(this, instructions), right, FlatOperand.Immediate(FlatValue.Int32(1))));
+                        // T//ODO: this should be trying to return immediatevalue-1...?
+                        return left_lvalue;
+                    case SyntaxKind.NegateExpression:
+                        if (into_lvalue != null)
+                        {
+                            instructions.Add(FlatStatement.NEGATE(into_lvalue, right));
+                            return into_lvalue.AsRValue(right.ImmediateValue);
+                        }
+                        FlatOperand left = this.AllocateRegister("");
+                        into_lvalue = left.GetLValue(this, instructions);
+                        instructions.Add(FlatStatement.NEGATE(into_lvalue, right));
+                        return left;
+                }
             }
             if (node is BinaryExpressionSyntax)
             {
