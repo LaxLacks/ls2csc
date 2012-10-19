@@ -1715,6 +1715,8 @@ namespace LS2IL
                         instructions.Add(FlatStatement.NEGATE(into_lvalue, right));
                         return left;
                 }
+
+                throw new NotImplementedException("prefix unary " + pues.Kind.ToString());
             }
             if (node is BinaryExpressionSyntax)
             {
