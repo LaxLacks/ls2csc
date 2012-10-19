@@ -26,7 +26,47 @@ namespace System
         public int Length { get; }
     }
 
+    public struct SByte 
+    {
+    }
+
+    public struct Int16
+    {
+    }
+
     public struct Int32
+    {
+    }
+
+    public struct Int64 
+    {
+    }
+
+    public struct Byte
+    {
+    }
+
+    public struct UInt16
+    {
+    }
+
+    public struct UInt32
+    {
+    }
+
+    public struct UInt64
+    {
+    }
+
+    public struct Single
+    {
+    }
+
+    public struct Double
+    {
+    }
+
+    public struct Decimal
     {
     }
 
