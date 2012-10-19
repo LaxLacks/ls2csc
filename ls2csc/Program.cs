@@ -3,7 +3,7 @@
 // See something you don't like? Let's improve it.
 //
 //this #define is a convenience thing for me for debugging. sorry if you hate it.
-#define USEPREDEF
+//#define USEPREDEF
 using System;
 using System.Collections.Generic;
 using System.IO;
