@@ -170,10 +170,19 @@ namespace LS2IL
         {
             switch (type.SpecialType)
             {
+                case SpecialType.System_SByte:
+                case SpecialType.System_Int16:
                 case SpecialType.System_Int32:
-                    return FlatValueType.VT_Integer;
                 case SpecialType.System_Int64:
+                case SpecialType.System_Byte:
+                case SpecialType.System_UInt16:
+                case SpecialType.System_UInt32:
+                case SpecialType.System_UInt64:
                     return FlatValueType.VT_Integer;
+                case SpecialType.System_Single:
+                case SpecialType.System_Double:
+                case SpecialType.System_Decimal:
+                    return FlatValueType.VT_Decimal;
                 case SpecialType.System_String:
                     return FlatValueType.VT_String;
                 case SpecialType.System_Object:
