@@ -1257,16 +1257,22 @@ namespace LS2IL
 
             }
 
-            if (!(node.Expression is MemberAccessExpressionSyntax))
+            FlatOperand fop_subject;
+            if (node.Expression is MemberAccessExpressionSyntax)
             {
-                throw new NotImplementedException("CALLMETHOD not on MemberAccessExpressionSyntax");
+                MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)node.Expression;
+                fop_subject = ResolveExpression(meas.Expression, null, instructions);
+            }
+            else
+            {
+                // implied "this"
+                fop_subject = FlatOperand.ThisRef(FlatValue.FromType(si.Symbol.ContainingType));
             }
 
             {
-                MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)node.Expression;
 
 
-                FlatOperand fop_subject = ResolveExpression(meas.Expression, null, instructions);
+                
                 FlatOperand fop_type = TypeOf(fop_subject,null, null, instructions);
 
                 FlatOperand fop_method = Resolve(method, fop_type, null, instructions);
@@ -1891,6 +1897,15 @@ namespace LS2IL
             {
                 CastExpressionSyntax ces = (CastExpressionSyntax)node;
                 return Resolve(ces, result_type, into_lvalue, instructions);
+            }
+            if (node is ThisExpressionSyntax)
+            {
+                FlatOperand ThisObject = FlatOperand.ThisRef(FlatValue.FromType(result_type.ConvertedType));
+                if (into_lvalue != null)
+                {                   
+                    instructions.Add(FlatStatement.REFERENCE(into_lvalue, ThisObject));
+                }
+                return ThisObject;
             }
             throw new NotImplementedException();
         }
