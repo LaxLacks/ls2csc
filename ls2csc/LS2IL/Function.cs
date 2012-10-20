@@ -1545,7 +1545,7 @@ namespace LS2IL
                         }
 
                         instructions.Add(FlatStatement.SETFIELD(fop_subject, fop_field, fop_result));
-                        return fop_right;
+                        return fop_result;
                     }
                     break;
                 case SymbolKind.Property:
@@ -1586,7 +1586,7 @@ namespace LS2IL
 
 
                         instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_result));
-                        return fop_right;
+                        return fop_result;
                     }
                     break;
                 case SymbolKind.Local:
@@ -1609,7 +1609,7 @@ namespace LS2IL
                         {
                             FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
                             ResolveBinaryExpression(node.Kind, fop_subject, fop_right, fop_subject.GetLValue(this, instructions), instructions);
-                            return fop_right;
+                            return fop_subject;
                         }
                     }
                     break;
@@ -1644,6 +1644,126 @@ namespace LS2IL
 
         }
 
+        public FlatOperand ResolveExpression(PostfixUnaryExpressionSyntax pues, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            if (into_lvalue == null)
+            {
+                into_lvalue = this.AllocateRegister("");
+            }
+
+            SymbolInfo si = Model.GetSymbolInfo(pues.Operand);
+            FlatOperand fop_subject;
+            switch (si.Symbol.Kind)
+            {
+                case SymbolKind.Field:
+                    {
+                        // need the parent object for the field 
+                        fop_subject = ResolveParentExpression(si, pues.Operand, null, instructions);
+
+                        FlatOperand fop_field;
+                        TypeSymbol typeSymbol;
+                        FieldSymbol ps = (FieldSymbol)si.Symbol;
+
+                        if (ps.IsStatic)
+                        {
+                            throw new NotImplementedException("static Field assignment");
+                        }
+
+                        typeSymbol = ps.Type;
+                        fop_field = Resolve(ps, null, instructions);
+
+                        if (fop_field.OperandType != FlatOperandType.OPND_FIELD_VALUEREF)
+                        {
+                            throw new NotImplementedException("field reference resolved to non-field reference");
+                        }
+
+                        FlatOperand fop_field_op = FlatOperand.LiteralInteger(fop_field.OperandIndex);
+
+                        FlatOperand fop_result = this.AllocateRegister("");
+                        FlatOperand fop_result_lvalue = fop_result.GetLValue(this, instructions);
+
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue.GetLValue(this, instructions), fop_field));
+
+                        switch (pues.Kind)
+                        {
+                            case SyntaxKind.PostIncrementExpression:
+                                instructions.Add(FlatStatement.ADD(fop_result_lvalue, fop_field, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                break;
+                            case SyntaxKind.PostDecrementExpression:
+                                instructions.Add(FlatStatement.SUB(fop_result_lvalue, fop_field, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                break;
+                        }
+
+                        instructions.Add(FlatStatement.SETFIELD(fop_subject, fop_field_op, fop_result));
+                        return into_lvalue;
+                    }
+                    break;
+                case SymbolKind.Property:
+                    {
+                        fop_subject = ResolveParentExpression(si, pues.Operand, null, instructions);
+                        FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
+
+                        FlatOperand fop_property;
+                        TypeSymbol typeSymbol;
+                        {
+                            PropertySymbol ps = (PropertySymbol)si.Symbol;
+
+                            if (ps.IsStatic)
+                            {
+                                throw new NotImplementedException("static property assignment");
+                            }
+
+                            typeSymbol = ps.Type;
+                            fop_property = Resolve(ps, fop_type, null, instructions);
+                        }
+
+                        FlatOperand fop_result = this.AllocateRegister("");
+                        FlatOperand fop_result_lvalue = fop_result.GetLValue(this, instructions);
+
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue.GetLValue(this, instructions), fop_property));
+
+                        switch (pues.Kind)
+                        {
+                            case SyntaxKind.PostIncrementExpression:
+                                instructions.Add(FlatStatement.ADD(fop_result_lvalue, fop_property, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                break;
+                            case SyntaxKind.PostDecrementExpression:
+                                instructions.Add(FlatStatement.SUB(fop_result_lvalue, fop_property, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                break;
+                        }
+
+
+                        instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_result));
+                        return into_lvalue;
+                    }
+                    break;
+                case SymbolKind.Local:
+                    {
+                        FlatOperand op = ResolveExpression(pues.Operand, null, instructions);
+                        
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue.GetLValue(this, instructions), op));
+
+                        switch (pues.Kind)
+                        {
+                            case SyntaxKind.PostIncrementExpression:
+                                instructions.Add(FlatStatement.ADD(op.GetLValue(this, instructions), op, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                return into_lvalue;
+                            case SyntaxKind.PostDecrementExpression:
+                                instructions.Add(FlatStatement.SUB(op.GetLValue(this, instructions), op, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                return into_lvalue;
+                        }
+                    }
+                    break;
+                case SymbolKind.Parameter:
+                    {
+
+                    }
+                    break;
+            }
+
+            throw new NotImplementedException("postfix unary " + pues.Kind.ToString());
+        }
+
         public FlatOperand ResolveExpression(ExpressionSyntax node, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             TypeInfo result_type = Model.GetTypeInfo(node);
@@ -1660,50 +1780,14 @@ namespace LS2IL
             }
             if (node is PostfixUnaryExpressionSyntax)
             {
-                PostfixUnaryExpressionSyntax pues = (PostfixUnaryExpressionSyntax)node;
-
-                //pues.Operand;
-                FlatOperand left = ResolveLValue(pues.Operand, instructions);
-                if (into_lvalue == null)
-                {
-                    into_lvalue = this.AllocateRegister("");
-                }
-
-                FlatOperand left_lvalue = left.GetLValue(this, instructions);
-
-                switch (pues.Kind)
-                {
-                    case SyntaxKind.PostIncrementExpression:
-                        instructions.Add(FlatStatement.DUPLICATE(FlatOperand.Immediate(FlatValue.Int32(into_lvalue.OperandIndex)), left));
-                        instructions.Add(FlatStatement.ADD(left_lvalue, left, FlatOperand.Immediate(FlatValue.Int32(1))));
-                        // TODO: this should be trying to return immediatevalue+1...?
-                        return into_lvalue;
-                    case SyntaxKind.PostDecrementExpression:
-                        instructions.Add(FlatStatement.DUPLICATE(FlatOperand.Immediate(FlatValue.Int32(into_lvalue.OperandIndex)), left));
-                        instructions.Add(FlatStatement.SUB(left_lvalue, left, FlatOperand.Immediate(FlatValue.Int32(1))));
-                        // TODO: this should be trying to return immediatevalue-1...?
-                        return into_lvalue;
-                }
-                
-                throw new NotImplementedException("postfix unary " + pues.Kind.ToString());
+                return ResolveExpression((PostfixUnaryExpressionSyntax)node, into_lvalue, instructions);
             }
             if (node is PrefixUnaryExpressionSyntax)
             {
                 PrefixUnaryExpressionSyntax pues = (PrefixUnaryExpressionSyntax)node;
                 FlatOperand right = ResolveExpression(pues.Operand, into_lvalue, instructions);
-                FlatOperand left_lvalue;
                 switch (pues.Kind)
                 {
-                    case SyntaxKind.PreIncrementExpression:
-                        left_lvalue = ResolveLValue(pues.Operand, instructions);
-                        instructions.Add(FlatStatement.ADD(left_lvalue.GetLValue(this, instructions), right, FlatOperand.Immediate(FlatValue.Int32(1))));
-                        // TODO: this should be trying to return immediatevalue+1...?
-                        return left_lvalue;
-                    case SyntaxKind.PreDecrementExpression:
-                        left_lvalue = ResolveLValue(pues.Operand, instructions);
-                        instructions.Add(FlatStatement.SUB(left_lvalue.GetLValue(this, instructions), right, FlatOperand.Immediate(FlatValue.Int32(1))));
-                        // T//ODO: this should be trying to return immediatevalue-1...?
-                        return left_lvalue;
                     case SyntaxKind.NegateExpression:
                         if (into_lvalue != null)
                         {
@@ -1716,7 +1800,7 @@ namespace LS2IL
                         return left;
                 }
 
-                throw new NotImplementedException("prefix unary " + pues.Kind.ToString());
+                throw new NotImplementedException("Prefix unary " + pues.Kind.ToString());
             }
             if (node is BinaryExpressionSyntax)
             {
