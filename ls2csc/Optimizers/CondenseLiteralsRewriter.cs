@@ -63,11 +63,11 @@ namespace ls2csc.Optimizers
             {
                 if (nodeValue == true)
                 {
-                    return Syntax.LiteralExpression(SyntaxKind.TrueLiteralExpression, Syntax.Literal(0));
+                    return Syntax.LiteralExpression(SyntaxKind.TrueLiteralExpression, Syntax.Token(SyntaxKind.TrueKeyword));
                 }
                 else
                 {
-                    return Syntax.LiteralExpression(SyntaxKind.TrueLiteralExpression, Syntax.Literal(1));
+                    return Syntax.LiteralExpression(SyntaxKind.FalseLiteralExpression, Syntax.Token(SyntaxKind.FalseKeyword));
                 }
             }
             return Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(nodeValue));
