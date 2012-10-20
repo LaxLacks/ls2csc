@@ -134,6 +134,13 @@ namespace noob536.Test{
             {
                 // get libraries!
 
+                SyntaxNode newRoot = tree.GetRoot();
+
+                newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
+                newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
+
+                tree = SyntaxTree.Create((CompilationUnitSyntax)newRoot);
+
                 List<SyntaxTree> syntaxTrees = new List<SyntaxTree>();
 
                 syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.LavishScriptAPI.cs")));
@@ -180,5 +187,28 @@ namespace noob536.Test{
 #endif
 
         }
+    }
+
+    class PrefixUnaryToBinaryRewriter : SyntaxRewriter
+    {
+        public override SyntaxNode VisitPrefixUnaryExpression(PrefixUnaryExpressionSyntax node)
+        {
+            switch (node.Kind)
+            {
+                case SyntaxKind.PreIncrementExpression:
+                    return Syntax.BinaryExpression(SyntaxKind.AddAssignExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(1)));
+                case SyntaxKind.PreDecrementExpression:
+                    return Syntax.BinaryExpression(SyntaxKind.SubtractAssignExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(1)));
+                case SyntaxKind.NegateExpression:
+                    if (node.Operand.Kind == SyntaxKind.NumericLiteralExpression)
+                    {
+                        dynamic newvalue = -((dynamic)((LiteralExpressionSyntax)node.Operand).Token.Value);
+                        return Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression,Syntax.Literal(newvalue));
+                    }
+                    return node;
+            }
+            throw new NotImplementedException("Unary prefix " + node.Kind.ToString());
+        }
+
     }
 }
