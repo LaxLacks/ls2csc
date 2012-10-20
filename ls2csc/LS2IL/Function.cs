@@ -331,7 +331,7 @@ namespace LS2IL
                             throw new NotImplementedException("Unresolved label " + fv.ValueText);
                         }
 
-                        fv.ValueType = FlatValueType.VT_Integer;
+                        fv.ValueType = FlatValueType.VT_Int32;
                         fv.ValueText = labelValue.ToString();
                         fv.Object = labelValue;
                     }
@@ -1033,6 +1033,30 @@ namespace LS2IL
             throw new NotImplementedException();
         }
 
+        public FlatOperand Resolve(CastExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            /*
+        // Summary:
+        //     SyntaxToken representing the close parenthesis.
+        public SyntaxToken CloseParenToken { get; }
+        //
+        // Summary:
+        //     ExpressionSyntax node representing the expression that is being casted.
+        public ExpressionSyntax Expression { get; }
+        //
+        // Summary:
+        //     SyntaxToken representing the open parenthesis.
+        public SyntaxToken OpenParenToken { get; }
+        //
+        // Summary:
+        //     TypeSyntax node representing the type the expression is being casted to.
+        public TypeSyntax Type { get; }
+        /**/
+            return ResolveExpression(node.Expression, into_lvalue, instructions);
+            
+            throw new NotImplementedException("type-cast expression");
+        }
+
         public FlatOperand Resolve(MemberAccessExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             SymbolInfo si = Model.GetSymbolInfo(node);
@@ -1644,6 +1668,43 @@ namespace LS2IL
 
         }
 
+        public FlatOperand ResolveExpression(PostfixUnaryExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            /*
+            // Summary:
+            //     ExpressionSyntax representing the operand of the postfix unary expression.
+            public ExpressionSyntax Operand { get; }
+            */
+
+
+
+            /*
+            FlatOperand left = ResolveLValue(node.Operand, instructions);
+
+
+            FlatOperand left_lvalue = left.GetLValue(this, instructions);
+
+            switch (node.Kind)
+            {
+                case SyntaxKind.PostIncrementExpression:
+                    instructions.Add(FlatStatement.ADD(left_lvalue, left, FlatOperand.Immediate(FlatValue.Int32(1))));
+                    // TODO: this should be trying to return immediatevalue+1...?
+                    return FlatOperand.Immediate(left_lvalue.ImmediateValue);
+                case SyntaxKind.PostDecrementExpression:
+                    instructions.Add(FlatStatement.SUB(left_lvalue, left, FlatOperand.Immediate(FlatValue.Int32(1))));
+                    // TODO: this should be trying to return immediatevalue-1...?
+                    return FlatOperand.Immediate(left_lvalue.ImmediateValue);
+            }
+            /**/
+            throw new NotImplementedException("postfix unary " + node.Kind.ToString());
+        }
+
+        public FlatOperand ResolveExpression(PrefixUnaryExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            throw new NotImplementedException("prefix unary operators");
+        }
+
+
         public FlatOperand ResolveExpression(ExpressionSyntax node, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             TypeInfo result_type = Model.GetTypeInfo(node);
@@ -1661,26 +1722,12 @@ namespace LS2IL
             if (node is PostfixUnaryExpressionSyntax)
             {
                 PostfixUnaryExpressionSyntax pues = (PostfixUnaryExpressionSyntax)node;
-
-                //pues.Operand;
-                FlatOperand left = ResolveLValue(pues.Operand, instructions);
-                
-
-                FlatOperand left_lvalue = left.GetLValue(this, instructions);
-
-                switch (pues.Kind)
-                {
-                    case SyntaxKind.PostIncrementExpression:
-                        instructions.Add(FlatStatement.ADD(left_lvalue, left, FlatOperand.Immediate(FlatValue.Int32(1))));
-                        // TODO: this should be trying to return immediatevalue+1...?
-                        return FlatOperand.Immediate(left_lvalue.ImmediateValue);
-                    case SyntaxKind.PostDecrementExpression:
-                        instructions.Add(FlatStatement.SUB(left_lvalue, left, FlatOperand.Immediate(FlatValue.Int32(1))));
-                        // TODO: this should be trying to return immediatevalue-1...?
-                        return FlatOperand.Immediate(left_lvalue.ImmediateValue);
-                }
-                
-                throw new NotImplementedException("postfix unary " + pues.Kind.ToString());
+                return ResolveExpression(pues, result_type, into_lvalue, instructions);
+            }
+            if (node is PrefixUnaryExpressionSyntax)
+            {
+                PrefixUnaryExpressionSyntax pues = (PrefixUnaryExpressionSyntax)node;
+                return ResolveExpression(pues, result_type, into_lvalue, instructions);
             }
             if (node is BinaryExpressionSyntax)
             {
@@ -1735,7 +1782,11 @@ namespace LS2IL
                 ArrayCreationExpressionSyntax aces = (ArrayCreationExpressionSyntax)node;
                 return Resolve(aces, result_type, into_lvalue, instructions);
             }
-
+            if (node is CastExpressionSyntax)
+            {
+                CastExpressionSyntax ces = (CastExpressionSyntax)node;
+                return Resolve(ces, result_type, into_lvalue, instructions);
+            }
             throw new NotImplementedException();
         }
 

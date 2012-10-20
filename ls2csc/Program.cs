@@ -4,6 +4,8 @@
 //
 //this #define is a convenience thing for me for debugging. sorry if you hate it.
 //#define USEPREDEF
+// uncomment one is to catch exceptions with visual studio instead of dumping it to Error. there's probably a built in debug flag...
+#define OUTPUTEXCEPTIONS
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,7 +18,9 @@ using Roslyn.Services.CSharp;
 
 namespace ls2csc
 {
-
+    /// <summary>
+    /// Helper class that doesn't belong in this file, but retrieves streams by name from the assembly, e.g. ls2csc.Libraries.LavishScriptAPI.cs, which is Build Action=Embedded Resource
+    /// </summary>
     public class Resources
     {
         static Resources _Instance;
@@ -80,8 +84,12 @@ namespace ls2csc
         static void Main(string[] args)
         {            
             System.Console.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
-            System.Console.WriteLine("- Building for LS2IL version 0.6.20121017.2");
+            System.Console.WriteLine("- Building for LS2IL version 0.7.20121020.1");
 
+            // TODO: manage args. multiple input files, use as reference (e.g. Libraries/LavishScriptAPI.cs), etc. 
+            //       Roslyn supports #r directive for references. May be able to support that too.
+
+            // to hold the syntax tree from the input file.
             SyntaxTree tree;
 
             if (args != null && args.Length > 0)
@@ -96,27 +104,23 @@ namespace ls2csc
                 return;
 #endif
 
+                // this mess is for testing.
 #if USEPREDEF
                 string predef = @"
 /* expected
 done.
 */
-namespace noob536.Test{
-	public class Crash {
-		
-		// comment this out = no crash
-		protected Crash _crash;
-		
-		public static void Main(){
+namespace ls2csc.Test
+{
+	public class Program
+    {				
+        public static void Main()
+        {
+            ushort i = 65535;
+            i = (ushort)(i+1);
 
-			// causes innerspace to crash when you make a instance of a class containing itself
-			Crash c = new Crash();
-			System.Console.WriteLine(""done."");
+			System.Console.WriteLine(i.ToString());
 		}
-
-		// have to have this... get this otherwise.
-		// [System.Exception] Not found: Type 'noob536.Test.Crash' Method '.ctor{}'
-		//public Crash(){}
 	}
 }";
 #endif
@@ -128,12 +132,11 @@ namespace noob536.Test{
 #endif
             }
 
-#if !USEPREDEF
+#if OUTPUTEXCEPTIONS
             try
 #endif
             {
                 // get libraries!
-
                 List<SyntaxTree> syntaxTrees = new List<SyntaxTree>();
 
                 syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.LavishScriptAPI.cs")));
@@ -172,7 +175,7 @@ namespace noob536.Test{
 
                 System.Console.WriteLine("");
             }
-#if !USEPREDEF
+#if OUTPUTEXCEPTIONS
             catch (Exception e)
             {
                 System.Console.Error.WriteLine("ls2csc: Unhandled Exception " + e.ToString());

@@ -9,7 +9,10 @@ using Roslyn.Compilers.CSharp;
 namespace ls2csc
 {
 
-
+    /// <summary>
+    /// This SyntaxWalker implements the first phase of scanning. We collect Class declarations and tell the Chunk about their members. 
+    /// The results will go into the metadata emitted into the LS2IL, which in turn gets used by the VM/runtime to initialize types.
+    /// </summary>
     class DeclarationCollector : SyntaxWalker
     {
         public DeclarationCollector(Chunk chunk)

@@ -7,6 +7,9 @@ using LS2IL;
 
 namespace ls2csc
 {
+    /// <summary>
+    /// 
+    /// </summary>
     class FinallyInjectLeaves
     {
         public FinallyInjectLeaves(Function f)
