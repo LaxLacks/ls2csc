@@ -130,7 +130,7 @@ namespace LS2IL
                         throw new NotImplementedException("Unresolved label " + fv.ValueText);
                     }
 
-                    fv.ValueType = FlatValueType.VT_Integer;
+                    fv.ValueType = FlatValueType.VT_Int32;
                     fv.ValueText = labelValue.ToString();
                     fv.Object = labelValue;                   
                 }

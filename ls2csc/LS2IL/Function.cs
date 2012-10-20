@@ -331,7 +331,7 @@ namespace LS2IL
                             throw new NotImplementedException("Unresolved label " + fv.ValueText);
                         }
 
-                        fv.ValueType = FlatValueType.VT_Integer;
+                        fv.ValueType = FlatValueType.VT_Int32;
                         fv.ValueText = labelValue.ToString();
                         fv.Object = labelValue;
                     }
@@ -1033,6 +1033,30 @@ namespace LS2IL
             throw new NotImplementedException();
         }
 
+        public FlatOperand Resolve(CastExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            /*
+        // Summary:
+        //     SyntaxToken representing the close parenthesis.
+        public SyntaxToken CloseParenToken { get; }
+        //
+        // Summary:
+        //     ExpressionSyntax node representing the expression that is being casted.
+        public ExpressionSyntax Expression { get; }
+        //
+        // Summary:
+        //     SyntaxToken representing the open parenthesis.
+        public SyntaxToken OpenParenToken { get; }
+        //
+        // Summary:
+        //     TypeSyntax node representing the type the expression is being casted to.
+        public TypeSyntax Type { get; }
+        /**/
+            return ResolveExpression(node.Expression, into_lvalue, instructions);
+            
+            throw new NotImplementedException("type-cast expression");
+        }
+
         public FlatOperand Resolve(MemberAccessExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             SymbolInfo si = Model.GetSymbolInfo(node);
@@ -1644,11 +1668,12 @@ namespace LS2IL
 
         }
 
-        public FlatOperand ResolveExpression(PostfixUnaryExpressionSyntax pues, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public FlatOperand ResolveExpression(PostfixUnaryExpressionSyntax pues, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             if (into_lvalue == null)
             {
                 into_lvalue = this.AllocateRegister("");
+                into_lvalue = into_lvalue.GetLValue(this, instructions);
             }
 
             SymbolInfo si = Model.GetSymbolInfo(pues.Operand);
@@ -1682,7 +1707,7 @@ namespace LS2IL
                         FlatOperand fop_result = this.AllocateRegister("");
                         FlatOperand fop_result_lvalue = fop_result.GetLValue(this, instructions);
 
-                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue.GetLValue(this, instructions), fop_field));
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_field));
 
                         switch (pues.Kind)
                         {
@@ -1695,7 +1720,7 @@ namespace LS2IL
                         }
 
                         instructions.Add(FlatStatement.SETFIELD(fop_subject, fop_field_op, fop_result));
-                        return into_lvalue;
+                        return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                     }
                     break;
                 case SymbolKind.Property:
@@ -1720,7 +1745,7 @@ namespace LS2IL
                         FlatOperand fop_result = this.AllocateRegister("");
                         FlatOperand fop_result_lvalue = fop_result.GetLValue(this, instructions);
 
-                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue.GetLValue(this, instructions), fop_property));
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_property));
 
                         switch (pues.Kind)
                         {
@@ -1734,23 +1759,23 @@ namespace LS2IL
 
 
                         instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_result));
-                        return into_lvalue;
+                        return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                     }
                     break;
                 case SymbolKind.Local:
                     {
                         FlatOperand op = ResolveExpression(pues.Operand, null, instructions);
                         
-                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue.GetLValue(this, instructions), op));
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, op));
 
                         switch (pues.Kind)
                         {
                             case SyntaxKind.PostIncrementExpression:
                                 instructions.Add(FlatStatement.ADD(op.GetLValue(this, instructions), op, FlatOperand.Immediate(FlatValue.Int32(1))));
-                                return into_lvalue;
+                                return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                             case SyntaxKind.PostDecrementExpression:
                                 instructions.Add(FlatStatement.SUB(op.GetLValue(this, instructions), op, FlatOperand.Immediate(FlatValue.Int32(1))));
-                                return into_lvalue;
+                                return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                         }
                     }
                     break;
@@ -1764,6 +1789,13 @@ namespace LS2IL
             throw new NotImplementedException("postfix unary " + pues.Kind.ToString());
         }
 
+        /// <summary>
+        /// Resolves an expression into an r-value (where 0 is an l-value meaning register 0, register[0] is its r-value)
+        /// </summary>
+        /// <param name="node">the expression to resolve</param>
+        /// <param name="into_lvalue">Either an existing l-value, or null to auto-generate where necessary</param>
+        /// <param name="instructions">the set of instructions to generate any new instructions into</param>
+        /// <returns>An r-value with the result</returns>
         public FlatOperand ResolveExpression(ExpressionSyntax node, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             TypeInfo result_type = Model.GetTypeInfo(node);
@@ -1780,7 +1812,7 @@ namespace LS2IL
             }
             if (node is PostfixUnaryExpressionSyntax)
             {
-                return ResolveExpression((PostfixUnaryExpressionSyntax)node, into_lvalue, instructions);
+                return ResolveExpression((PostfixUnaryExpressionSyntax)node, result_type, into_lvalue, instructions);
             }
             if (node is PrefixUnaryExpressionSyntax)
             {
@@ -1855,7 +1887,11 @@ namespace LS2IL
                 ArrayCreationExpressionSyntax aces = (ArrayCreationExpressionSyntax)node;
                 return Resolve(aces, result_type, into_lvalue, instructions);
             }
-
+            if (node is CastExpressionSyntax)
+            {
+                CastExpressionSyntax ces = (CastExpressionSyntax)node;
+                return Resolve(ces, result_type, into_lvalue, instructions);
+            }
             throw new NotImplementedException();
         }
 

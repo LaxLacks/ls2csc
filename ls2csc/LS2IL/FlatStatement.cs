@@ -98,7 +98,7 @@ namespace LS2IL
             if (OperandType != FlatOperandType.OPND_IMMEDIATE)
                 throw new NotSupportedException("Can only turn OPND_IMMEDIATE into RValue");
 
-            if (ImmediateValue.ValueType == FlatValueType.VT_Integer)
+            if (ImmediateValue.ValueType == FlatValueType.VT_Int32)
             {
                 return FlatOperand.RegisterRef((int)ImmediateValue.Object,immediate_value);
             }
