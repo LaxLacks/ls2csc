@@ -142,6 +142,7 @@ namespace ls2csc.Test
 
                 newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
                 newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
+                newRoot = new FieldInitializerRewriter().Visit(newRoot);
 
                 tree = SyntaxTree.Create((CompilationUnitSyntax)newRoot);
 
@@ -191,28 +192,5 @@ namespace ls2csc.Test
 #endif
 
         }
-    }
-
-    class PrefixUnaryToBinaryRewriter : SyntaxRewriter
-    {
-        public override SyntaxNode VisitPrefixUnaryExpression(PrefixUnaryExpressionSyntax node)
-        {
-            switch (node.Kind)
-            {
-                case SyntaxKind.PreIncrementExpression:
-                    return Syntax.BinaryExpression(SyntaxKind.AddAssignExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(1)));
-                case SyntaxKind.PreDecrementExpression:
-                    return Syntax.BinaryExpression(SyntaxKind.SubtractAssignExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(1)));
-                case SyntaxKind.NegateExpression:
-                    if (node.Operand.Kind == SyntaxKind.NumericLiteralExpression)
-                    {
-                        dynamic newvalue = -((dynamic)((LiteralExpressionSyntax)node.Operand).Token.Value);
-                        return Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression,Syntax.Literal(newvalue));
-                    }
-                    return node;
-            }
-            throw new NotImplementedException("Unary prefix " + node.Kind.ToString());
-        }
-
     }
 }

@@ -48,8 +48,10 @@
   <ItemGroup>
     <Compile Include="DeclarationCollector.cs" />
     <Compile Include="ExtensionMethods.cs" />
+    <Compile Include="FieldInitializerRewriter.cs" />
     <Compile Include="FinallyInjectLeaves.cs" />
     <Compile Include="Intrinsics.cs" />
+    <Compile Include="UnaryToBinaryRewriter.cs" />
     <EmbeddedResource Include="Libraries\LavishScriptAPI.cs" />
     <EmbeddedResource Include="Libraries\System.cs" />
     <Compile Include="LS2IL\Chunk.cs" />
