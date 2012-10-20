@@ -134,7 +134,11 @@ namespace noob536.Test{
             {
                 // get libraries!
 
-                SyntaxNode newRoot = new PrefixUnaryToBinaryRewriter().Visit(tree.GetRoot());
+                SyntaxNode newRoot = tree.GetRoot();
+
+                newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
+                newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
+
                 tree = SyntaxTree.Create((CompilationUnitSyntax)newRoot);
 
                 List<SyntaxTree> syntaxTrees = new List<SyntaxTree>();
