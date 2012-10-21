@@ -1085,7 +1085,15 @@ namespace LS2IL
                 FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
                 FlatOperand fop_property = Resolve(property, fop_type, null, instructions);
 
-                throw new NotImplementedException("static property access");
+                if (into_lvalue == null)
+                {
+                    FlatOperand register_fop = AllocateRegister("");
+                    into_lvalue = register_fop.GetLValue(this, instructions);
+                }
+
+                instructions.Add(FlatStatement.GETSTATICPROPERTY(into_lvalue, fop_property));
+                return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+
             }
 
             {
