@@ -111,4 +111,18 @@ namespace System
     {
         public static void WriteLine(string s);
     }
+
+    public static class Math
+    {
+        public const double E = 2.71828;
+        public const double PI = 3.14159;
+
+        public static decimal Abs(decimal value);
+        public static double Abs(double value);
+        public static float Abs(float value);
+        public static int Abs(int value);
+        public static long Abs(long value);
+        public static sbyte Abs(sbyte value);
+        public static short Abs(short value);
+    }
 }
