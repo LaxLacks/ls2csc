@@ -15,6 +15,7 @@ using Roslyn.Compilers;
 using Roslyn.Compilers.CSharp;
 using Roslyn.Services;
 using Roslyn.Services.CSharp;
+using NDesk.Options;
 
 namespace ls2csc
 {
@@ -82,9 +83,39 @@ namespace ls2csc
     class Program
     {
         static void Main(string[] args)
-        {            
-            System.Console.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
-            System.Console.WriteLine("- Building for LS2IL version 0.7.20121020.1");
+        {
+            System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
+            System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121020.1");
+
+            String inputfile = "";
+            String outputfile = "";
+            bool help = false;
+
+            OptionSet Options = new OptionSet(){
+                {"i|input=", "Input {file}", v => { inputfile = v; }},
+                {"o|output=", "Output {file}", v => { outputfile = v; }},
+                {"h|?|help", "Show this help and exit", v => { help = (v != null); }},
+            };
+
+            Options.Parse(args);
+
+            if (help)
+            {
+                System.Console.Error.WriteLine("Usage: ls2csc -i input.cs -o output.il");
+                Options.WriteOptionDescriptions(System.Console.Error);
+                return;
+            }
+
+            TextWriter output;
+
+            if (outputfile != "")
+            {
+                output = new StreamWriter(outputfile);
+            }
+            else
+            {
+                output = System.Console.Out;
+            }
 
             // TODO: manage args. multiple input files, use as reference (e.g. Libraries/LavishScriptAPI.cs), etc. 
             //       Roslyn supports #r directive for references. May be able to support that too.
@@ -92,15 +123,15 @@ namespace ls2csc
             // to hold the syntax tree from the input file.
             SyntaxTree tree;
 
-            if (args != null && args.Length > 0)
+            if (inputfile != "")
             {
-                System.Console.WriteLine("Attempting to compile from file '" + args[0] + "'");
-                tree = SyntaxTree.ParseFile(args[0]);
+                System.Console.Error.WriteLine("Attempting to compile from file '" + inputfile + "'");
+                tree = SyntaxTree.ParseFile(inputfile);
             }
             else
             {
 #if !USEPREDEF
-                System.Console.WriteLine("ls2csc: Filename required");
+                System.Console.Error.WriteLine("ls2csc: Filename required");
                 return;
 #endif
 
@@ -153,7 +184,7 @@ namespace ls2csc.Test
 
                 var root = (CompilationUnitSyntax)tree.GetRoot();
                 syntaxTrees.Add(tree);
-                var compilation = Compilation.Create("MyCompilation",syntaxTrees: syntaxTrees);
+                var compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
                 LS2IL.FlatObjectType.Compilation = compilation;
                 var model = compilation.GetSemanticModel(tree);
 
@@ -180,17 +211,22 @@ namespace ls2csc.Test
                 DeclarationCollector dc = new DeclarationCollector(chunk);
                 dc.Visit(root);
 
-                chunk.Emit();
+                chunk.Emit(output);
 
-                System.Console.WriteLine("");
+                output.WriteLine("");
             }
 #if OUTPUTEXCEPTIONS
             catch (Exception e)
             {
                 System.Console.Error.WriteLine("ls2csc: Unhandled Exception " + e.ToString());
             }
+            finally
+            
 #endif
+            {
+                output.Close();
 
+            }
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.IO;
 using Roslyn.Compilers;
 using Roslyn.Compilers.CSharp;
 
@@ -468,19 +469,19 @@ namespace LS2IL
             MetaValues.Add("Declared Types", fab.GetFlatValue());
         }
 
-        public void EmitMetaTable()
+        public void EmitMetaTable(TextWriter output)
         {
-            System.Console.WriteLine("; - begin meta table -");
+            output.WriteLine("; - begin meta table -");
             foreach (KeyValuePair<string, FlatValue> kvp in MetaValues)
             {
-                System.Console.WriteLine(".meta \"" + kvp.Key + "\" " + kvp.Value.ToString());
+                output.WriteLine(".meta \"" + kvp.Key + "\" " + kvp.Value.ToString());
             }
-            System.Console.WriteLine("; - end meta table -");
+            output.WriteLine("; - end meta table -");
         }
 
-        public void Emit()
+        public void Emit(TextWriter output)
         {
-            System.Console.WriteLine("; ---- begin chunk ----");
+            output.WriteLine("; ---- begin chunk ----");
 
             
             MethodSymbol entryPoint = Compilation.GetEntryPoint(CancellationToken.None);
@@ -494,7 +495,7 @@ namespace LS2IL
                     throw new NotImplementedException("Entry point function not built");
                 }
 
-                System.Console.WriteLine(".entry " + fEntryPoint.NumFunction);
+                output.WriteLine(".entry " + fEntryPoint.NumFunction);
             }
 
             for (int i = 0; i < FunctionsByNumber.Count; i++)
@@ -505,27 +506,27 @@ namespace LS2IL
 
             GenerateTypesMetadata();
 
-            EmitMetaTable();
+            EmitMetaTable(output);
 
-            System.Console.WriteLine("; ---- begin chunk values ----");
+            output.WriteLine("; ---- begin chunk values ----");
             foreach (string s in EmittedChunkValues)
             {
-                System.Console.WriteLine(s);
+                output.WriteLine(s);
             }
-            System.Console.WriteLine("; ---- end chunk values ----");
-            System.Console.WriteLine("");
+            output.WriteLine("; ---- end chunk values ----");
+            output.WriteLine("");
 
-            System.Console.WriteLine("; ---- begin functions ----");
+            output.WriteLine("; ---- begin functions ----");
 
             foreach (LS2IL.Function f in FunctionsByNumber)
             {
 
 
-                f.Emit();
+                f.Emit(output);
             }
-            System.Console.WriteLine("; ---- end functions ----");
+            output.WriteLine("; ---- end functions ----");
 
-            System.Console.WriteLine("; ---- end chunk ----");
+            output.WriteLine("; ---- end chunk ----");
 
         }
 

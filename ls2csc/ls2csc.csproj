@@ -51,6 +51,7 @@
     <Compile Include="FieldInitializerRewriter.cs" />
     <Compile Include="FinallyInjectLeaves.cs" />
     <Compile Include="Intrinsics.cs" />
+    <Compile Include="Options\Options.cs" />
     <Compile Include="UnaryToBinaryRewriter.cs" />
     <EmbeddedResource Include="Libraries\LavishScriptAPI.cs" />
     <EmbeddedResource Include="Libraries\System.cs" />
