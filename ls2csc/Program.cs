@@ -83,7 +83,7 @@ namespace ls2csc
     class Program
     {
         static void Main(string[] args)
-        {            
+        {
             System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
             System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121020.1");
 
@@ -99,7 +99,7 @@ namespace ls2csc
 
             Options.Parse(args);
 
-            if(help)
+            if (help)
             {
                 System.Console.Error.WriteLine("Usage: ls2csc -i input.cs -o output.il");
                 Options.WriteOptionDescriptions(System.Console.Error);
@@ -184,7 +184,7 @@ namespace ls2csc.Test
 
                 var root = (CompilationUnitSyntax)tree.GetRoot();
                 syntaxTrees.Add(tree);
-                var compilation = Compilation.Create("MyCompilation",syntaxTrees: syntaxTrees);
+                var compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
                 LS2IL.FlatObjectType.Compilation = compilation;
                 var model = compilation.GetSemanticModel(tree);
 
@@ -220,8 +220,13 @@ namespace ls2csc.Test
             {
                 System.Console.Error.WriteLine("ls2csc: Unhandled Exception " + e.ToString());
             }
+            finally
+            
 #endif
+            {
+                output.Close();
 
+            }
         }
     }
 }
