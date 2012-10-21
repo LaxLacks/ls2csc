@@ -229,7 +229,10 @@ namespace ls2csctest
                     int nErrors = 0;
                     foreach (Diagnostic d in diags)
                     {
-                        nErrors++;
+                        if (d.Info.Severity == DiagnosticSeverity.Error)
+                        {
+                            nErrors++;
+                        }
                         System.Console.Error.WriteLine(d.ToString());
                     }
                     if (nErrors > 0)
