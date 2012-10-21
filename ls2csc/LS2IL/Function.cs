@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO;
 using Roslyn.Compilers;
 using Roslyn.Compilers.CSharp;
 
@@ -379,59 +380,59 @@ namespace LS2IL
             EmittedInstructions.Add(s);
         }
 
-        public void EmitInstructions()
+        public void EmitInstructions(TextWriter output)
         {
-            System.Console.WriteLine("; - begin instructions -");
+            output.WriteLine("; - begin instructions -");
             foreach (string s in EmittedInstructions)
             {
                 if (s.StartsWith(";"))
-                    System.Console.WriteLine(s);
+                    output.WriteLine(s);
                 else if (s.EndsWith(":"))
-                    System.Console.WriteLine(s);
+                    output.WriteLine(s);
                 else
-                    System.Console.WriteLine("\t" + s);
+                    output.WriteLine("\t" + s);
             }
-            System.Console.WriteLine("; - end instructions -");
+            output.WriteLine("; - end instructions -");
         }
-        public void EmitValues()
+        public void EmitValues(TextWriter output)
         {
-            System.Console.WriteLine("; - begin function values -");
+            output.WriteLine("; - begin function values -");
             foreach (FlatValue fv in FunctionValues)
             {
-                System.Console.WriteLine(".value " + fv.ToString());
+                output.WriteLine(".value " + fv.ToString());
             }
-            System.Console.WriteLine("; - end function values -");
+            output.WriteLine("; - end function values -");
         }
-        public void EmitMetaTable()
+        public void EmitMetaTable(TextWriter output)
         {
-            System.Console.WriteLine("; - begin meta table -");
+            output.WriteLine("; - begin meta table -");
             foreach (KeyValuePair<string, FlatValue> kvp in MetaValues)
             {
-                System.Console.WriteLine(".meta \"" + kvp.Key + "\" " + kvp.Value.ToString());
+                output.WriteLine(".meta \"" + kvp.Key + "\" " + kvp.Value.ToString());
             }
-            System.Console.WriteLine("; - end meta table -");
+            output.WriteLine("; - end meta table -");
         }
 
 
 
-        public void Emit()
+        public void Emit(TextWriter output)
         {
-            System.Console.WriteLine("");
-            System.Console.WriteLine("; function[" + this.NumFunction.ToString() + "]");
-            System.Console.WriteLine("function");
-            System.Console.WriteLine(";.inputs " + (this.MethodSymbol.Parameters.Count + (MethodSymbol.ReturnsVoid?0:1)).ToString());
+            output.WriteLine("");
+            output.WriteLine("; function[" + this.NumFunction.ToString() + "]");
+            output.WriteLine("function");
+            output.WriteLine(";.inputs " + (this.MethodSymbol.Parameters.Count + (MethodSymbol.ReturnsVoid?0:1)).ToString());
 
-            EmitMetaTable();
-            EmitValues();
+            EmitMetaTable(output);
+            EmitValues(output);
 
-            System.Console.WriteLine(".registers " + this.Registers.Count.ToString());
-            System.Console.WriteLine("");
+            output.WriteLine(".registers " + this.Registers.Count.ToString());
+            output.WriteLine("");
 
-            EmitInstructions();
-            System.Console.WriteLine("");
+            EmitInstructions(output);
+            output.WriteLine("");
 
-            System.Console.WriteLine("endfunction");
-            System.Console.WriteLine("");
+            output.WriteLine("endfunction");
+            output.WriteLine("");
         }
 
         List<FlatStatement> Flatten()
