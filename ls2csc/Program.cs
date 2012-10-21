@@ -85,7 +85,7 @@ namespace ls2csc
         static void Main(string[] args)
         {
             System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
-            System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121020.1");
+            System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121021.1");
 
             String inputfile = "";
             String outputfile = "";
@@ -139,19 +139,50 @@ namespace ls2csc
 #if USEPREDEF
                 string predef = @"
 /* expected
-done.
+your ls2 filename: <preloaded> IsStarted=true
 */
-namespace ls2csc.Test
+using System;
+using LavishScript2;
+namespace ls2csctest
 {
-	public class Program
-    {				
-        public static void Main()
-        {
-            ushort i = 65535;
-            i = (ushort)(i+1);
-            i++;
+	public class Test{
+		public static void Main(){
+			FieldTest ft = new FieldTest();
+			ft.Test();
 
-			System.Console.WriteLine(i.ToString());
+            Script[] scripts = Script.AllScripts;
+            int count = scripts.Length;
+            for (int i = 0 ; i < count ; i++) // foreach is not yet implemented by the compiler. so sue me.
+            {
+                Script s = scripts[i];
+            
+                
+                string fname;
+
+                try
+                {
+                    fname = s.Filename;
+                }
+                catch
+                {
+                    fname = ""<preloaded>""; // expected since we are currently building bytecode from ls2il in memory, instead of using a bytecode file
+                }
+
+                System.Console.WriteLine(s.Name+"": ""+fname+"" IsStarted=""+s.IsStarted.ToString());
+            }
+		}
+	}
+	
+	public class FieldTest{
+		public int num = -10;
+
+		public void OtherTest(){
+		
+		}
+		public void Test(){
+			OtherTest();
+			
+			this.OtherTest();
 		}
 	}
 }";
@@ -180,6 +211,7 @@ namespace ls2csc.Test
                 List<SyntaxTree> syntaxTrees = new List<SyntaxTree>();
 
                 syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.LavishScriptAPI.cs")));
+                syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.LavishScript2.cs")));
                 syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.System.cs")));
 
                 var root = (CompilationUnitSyntax)tree.GetRoot();
@@ -225,7 +257,6 @@ namespace ls2csc.Test
 #endif
             {
                 output.Close();
-
             }
         }
     }
