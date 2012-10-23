@@ -581,7 +581,7 @@ namespace LS2IL
                         }
 
                         // implied "this"
-                        FlatOperand fop_field = Resolve((FieldSymbol)si.Symbol, null, instructions);
+                        FlatOperand fop_field = Resolve((FieldSymbol)si.Symbol, null, null, instructions);
 
                         return fop_field;
                     }
@@ -649,8 +649,26 @@ namespace LS2IL
             return into_lvalue.AsRValue(FlatValue.Method(method));
         }
 
+        public bool GetRuntimeFieldNumber(FieldSymbol field, out int nField)
+        {
+            TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
+            if (tei == null)
+            {
+                throw new NotImplementedException("field of type without fields declarations? " + field.ContainingType.GetFullyQualifiedName());
+            }
 
-        public FlatOperand Resolve(FieldSymbol field, FlatOperand into_lvalue, List<FlatStatement> instructions)
+            if (tei.ResolveRuntimeField(field.Name, out nField))
+            {
+                return true;
+            }
+            if (tei.ResolveRuntimeStaticField(field.Name, out nField))
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public FlatOperand Resolve(FieldSymbol field, FlatOperand fop_subject, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             string field_name = field.Name;
 
@@ -660,19 +678,40 @@ namespace LS2IL
                 throw new NotImplementedException("field of type without fields declarations? " + field.ContainingType.GetFullyQualifiedName());
             }
             
+            int nTypeField;
             int nField;
-            if (tei.FieldNames.TryGetValue(field_name, out nField))
+            
+            if (tei.FieldNames.TryGetValue(field_name,out nTypeField) && tei.ResolveRuntimeField(field_name, out nField))
             {
-                FieldExtraInfo fei = tei.Fields[nField];
+                FieldExtraInfo fei = tei.Fields[nTypeField];
+                if (fop_subject != null)
+                {
+                    // not 'this', use GETFIELD
+                    if (into_lvalue == null)
+                    {
+                        into_lvalue = AllocateRegister("");
+                        into_lvalue = into_lvalue.GetLValue(this, instructions);
+                    }
+
+                    instructions.Add(FlatStatement.GETFIELD(into_lvalue, fop_subject, FlatOperand.Immediate(FlatValue.Int32(nField))));
+                    return into_lvalue.AsRValue(FlatValue.FromType(fei.Type));
+                }
 
                 // non-static field
                 return FlatOperand.FieldRef(nField, FlatValue.FromType(fei.Type));
             }
-            if (tei.StaticFieldNames.TryGetValue(field_name, out nField))
+            if (tei.StaticFieldNames.TryGetValue(field_name,out nTypeField) && tei.ResolveRuntimeStaticField(field_name, out nField))
             {
                 // static field
+                FieldExtraInfo fei = tei.StaticFields[nTypeField];
+                if (into_lvalue == null)
+                {
+                    into_lvalue = AllocateRegister("");
+                    into_lvalue = into_lvalue.GetLValue(this,instructions);
+                }
 
-                throw new NotImplementedException("static field from type " + field.ContainingType.GetFullyQualifiedName());
+                instructions.Add(FlatStatement.GETFIELD(into_lvalue, fop_subject, FlatOperand.Immediate(FlatValue.Int32(nField))));
+                return into_lvalue.AsRValue(FlatValue.FromType(fei.Type));
             }
 
             throw new NotImplementedException("missing field from type " + field.ContainingType.GetFullyQualifiedName());
@@ -1085,62 +1124,98 @@ namespace LS2IL
         public FlatOperand Resolve(MemberAccessExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             SymbolInfo si = Model.GetSymbolInfo(node);
-            if (si.Symbol.Kind != SymbolKind.Property)
+            switch (si.Symbol.Kind)
             {
-                throw new NotImplementedException("non-Property member access");
+                case SymbolKind.Property:
+                    {
+
+                        PropertySymbol property = (PropertySymbol)si.Symbol;
+
+                        // check for intrinsics
+                        string intrinsic;
+                        if (property.GetIntrinsic(out intrinsic))
+                        {
+                            var im = ls2csc.Intrinsics.ResolveProperty(intrinsic);
+                            if (im == null)
+                            {
+                                throw new NotImplementedException("Unhandled intrinsic method " + intrinsic);
+                            }
+                            return im.Resolve(node, result_type, si, into_lvalue, this, instructions);
+                        }
+
+                        if (si.Symbol.IsStatic)
+                        {
+                            FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
+                            FlatOperand fop_property = Resolve(property, fop_type, null, instructions);
+
+                            if (into_lvalue == null)
+                            {
+                                FlatOperand register_fop = AllocateRegister("");
+                                into_lvalue = register_fop.GetLValue(this, instructions);
+                            }
+
+                            instructions.Add(FlatStatement.GETSTATICPROPERTY(into_lvalue, fop_property));
+                            return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+
+                        }
+
+                        {
+                            FlatOperand fop_subject = ResolveExpression(node.Expression, null, instructions);
+                            FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
+
+                            FlatOperand fop_property = Resolve(property, fop_type, null, instructions);
+
+                            if (into_lvalue == null)
+                            {
+                                FlatOperand register_fop = AllocateRegister("");
+                                into_lvalue = register_fop.GetLValue(this, instructions);
+                            }
+
+                            instructions.Add(FlatStatement.GETPROPERTY(into_lvalue, fop_property, fop_subject));
+                            return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                        }
+                    }
+                    break;
+                case SymbolKind.Field:
+                    {
+
+                        FieldSymbol field = (FieldSymbol)si.Symbol;
+                        /*
+                        if (si.Symbol.IsStatic)
+                        {
+                            //throw new NotImplementedException("static field member access");
+                            
+                        }
+                        /**/
+
+//                        typeSymbol = ps.Type;
+                        FlatOperand fop_subject = ResolveExpression(node.Expression, null, instructions);
+                        FlatOperand fop_field = Resolve(field, fop_subject, null, instructions);
+                        return fop_field;
+                        /*
+                        if (fop_field.OperandType != FlatOperandType.OPND_FIELD_VALUEREF)
+                        {
+                            throw new NotImplementedException("field reference resolved to non-field reference");
+                        }
+
+                        fop_field = FlatOperand.LiteralInteger(fop_field.OperandIndex);
+
+                        if (into_lvalue == null)
+                        {
+                            into_lvalue = AllocateRegister("");
+                            into_lvalue = into_lvalue.GetLValue(this, instructions);
+                        }
+                        instructions.Add(FlatStatement.GETFIELD(into_lvalue, fop_subject, fop_field));
+                        return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                         */
+                    }
+                    break;
+                default:
+                    break;
             }
 
-            PropertySymbol property = (PropertySymbol)si.Symbol;
 
-            // check for intrinsics
-            string intrinsic;
-            if (property.GetIntrinsic(out intrinsic))
-            {
-                var im = ls2csc.Intrinsics.ResolveProperty(intrinsic);
-                if (im == null)
-                {
-                    throw new NotImplementedException("Unhandled intrinsic method " + intrinsic);
-                }
-                return im.Resolve(node, result_type, si, into_lvalue, this, instructions);
-            }
-
-            if (si.Symbol.IsStatic)
-            {
-                FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
-                FlatOperand fop_property = Resolve(property, fop_type, null, instructions);
-
-                if (into_lvalue == null)
-                {
-                    FlatOperand register_fop = AllocateRegister("");
-                    into_lvalue = register_fop.GetLValue(this, instructions);
-                }
-
-                instructions.Add(FlatStatement.GETSTATICPROPERTY(into_lvalue, fop_property));
-                return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
-
-            }
-
-            {
-                FlatOperand fop_subject = ResolveExpression(node.Expression, null, instructions);
-                FlatOperand fop_type = TypeOf(fop_subject,null, null, instructions);
-
-                FlatOperand fop_property = Resolve(property, fop_type, null, instructions);
-
-                if (into_lvalue == null)
-                {
-                    FlatOperand register_fop = AllocateRegister("");
-                    into_lvalue = register_fop.GetLValue(this, instructions);
-                }
-
-                instructions.Add(FlatStatement.GETPROPERTY(into_lvalue, fop_property, fop_subject));
-                return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
-            }
-            /*
-            LS2Property prop = (LS2Property)member;
-            return prop.Flatten_Get(subject, this, instructions);
-            */
-
-            throw new NotImplementedException("property " + node.ToString());
+            throw new NotImplementedException("unhandled member access type "+si.Symbol.Kind.ToString());
 
         }
 
@@ -1583,7 +1658,6 @@ namespace LS2IL
                         // need the parent object for the field 
                         fop_subject = ResolveParentExpression(si,node.Left, null, instructions);
 
-                        FlatOperand fop_field;
                         TypeSymbol typeSymbol;
                         FieldSymbol ps = (FieldSymbol)si.Symbol;
 
@@ -1593,14 +1667,13 @@ namespace LS2IL
                         }
 
                         typeSymbol = ps.Type;
-                        fop_field = Resolve(ps, null, instructions);
 
-                        if (fop_field.OperandType != FlatOperandType.OPND_FIELD_VALUEREF)
+                        int nField;
+                        if (!GetRuntimeFieldNumber(ps, out nField))
                         {
-                            throw new NotImplementedException("field reference resolved to non-field reference");
+                            throw new NotImplementedException("missing field " + ps.ToDisplayString());
                         }
-
-                        fop_field = FlatOperand.LiteralInteger(fop_field.OperandIndex);
+                        FlatOperand fop_fieldnum = FlatOperand.LiteralInteger(nField);
 
                         FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
 
@@ -1612,12 +1685,12 @@ namespace LS2IL
                         {
                             fop_result = AllocateRegister("");
                             lvalue_result = fop_result.GetLValue(this, instructions);
-                            instructions.Add(FlatStatement.GETFIELD(lvalue_result, fop_subject, fop_field));
+                            instructions.Add(FlatStatement.GETFIELD(lvalue_result, fop_subject, fop_fieldnum));
 
                             ResolveBinaryExpression(node.Kind, fop_result, fop_right, lvalue_result, instructions);
                         }
 
-                        instructions.Add(FlatStatement.SETFIELD(fop_subject, fop_field, fop_result));
+                        instructions.Add(FlatStatement.SETFIELD(fop_subject, fop_fieldnum, fop_result));
                         return fop_result;
                     }
                     break;
@@ -1734,41 +1807,43 @@ namespace LS2IL
                         // need the parent object for the field 
                         fop_subject = ResolveParentExpression(si, pues.Operand, null, instructions);
 
-                        FlatOperand fop_field;
                         TypeSymbol typeSymbol;
                         FieldSymbol ps = (FieldSymbol)si.Symbol;
-
+                        
                         if (ps.IsStatic)
                         {
                             throw new NotImplementedException("static Field assignment");
                         }
 
                         typeSymbol = ps.Type;
-                        fop_field = Resolve(ps, null, instructions);
-
-                        if (fop_field.OperandType != FlatOperandType.OPND_FIELD_VALUEREF)
+                        int nField;
+                        if (!GetRuntimeFieldNumber(ps, out nField))
                         {
-                            throw new NotImplementedException("field reference resolved to non-field reference");
+                            throw new NotImplementedException("missing field " + ps.ToDisplayString());
                         }
 
-                        FlatOperand fop_field_op = FlatOperand.LiteralInteger(fop_field.OperandIndex);
+                        FlatOperand fop_fieldnum = FlatOperand.LiteralInteger(nField);
 
-                        FlatOperand fop_result = this.AllocateRegister("");
-                        FlatOperand fop_result_lvalue = fop_result.GetLValue(this, instructions);
+                        FlatOperand fop_currentvalue = this.AllocateRegister("");
+                        FlatOperand fop_currentlvalue = fop_currentvalue.GetLValue(this, instructions);
 
-                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_field));
+                        // DUPLICATE (to return) the current value of the field
+                        // then increment and SETFIELD
+                        instructions.Add(FlatStatement.GETFIELD(fop_currentlvalue, fop_subject, fop_fieldnum));
+
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
 
                         switch (pues.Kind)
                         {
                             case SyntaxKind.PostIncrementExpression:
-                                instructions.Add(FlatStatement.ADD(fop_result_lvalue, fop_field, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                instructions.Add(FlatStatement.ADD(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int8(1))));
                                 break;
                             case SyntaxKind.PostDecrementExpression:
-                                instructions.Add(FlatStatement.SUB(fop_result_lvalue, fop_field, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                instructions.Add(FlatStatement.SUB(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int8(1))));
                                 break;
                         }
 
-                        instructions.Add(FlatStatement.SETFIELD(fop_subject, fop_field_op, fop_result));
+                        instructions.Add(FlatStatement.SETFIELD(fop_subject, fop_fieldnum, fop_currentvalue));
                         return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                     }
                     break;
@@ -1791,23 +1866,24 @@ namespace LS2IL
                             fop_property = Resolve(ps, fop_type, null, instructions);
                         }
 
-                        FlatOperand fop_result = this.AllocateRegister("");
-                        FlatOperand fop_result_lvalue = fop_result.GetLValue(this, instructions);
+                        FlatOperand fop_currentvalue = this.AllocateRegister("");
+                        FlatOperand fop_currentlvalue = fop_currentvalue.GetLValue(this, instructions);
 
-                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_property));
+                        instructions.Add(FlatStatement.GETPROPERTY(fop_currentlvalue, fop_property, fop_subject));
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
 
                         switch (pues.Kind)
                         {
                             case SyntaxKind.PostIncrementExpression:
-                                instructions.Add(FlatStatement.ADD(fop_result_lvalue, fop_property, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                instructions.Add(FlatStatement.ADD(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int32(1))));
                                 break;
                             case SyntaxKind.PostDecrementExpression:
-                                instructions.Add(FlatStatement.SUB(fop_result_lvalue, fop_property, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                instructions.Add(FlatStatement.SUB(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int32(1))));
                                 break;
                         }
 
 
-                        instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_result));
+                        instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_currentvalue));
                         return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                     }
                     break;

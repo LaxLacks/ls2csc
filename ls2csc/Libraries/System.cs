@@ -39,6 +39,10 @@ namespace System
         public string Name { get; set; }
     }
 
+    public abstract class ValueType
+    {
+    }
+
     public abstract class Array : Collections.IEnumerable
     {
         // this will translate into the LEN instruction, rather than a property access
@@ -46,6 +50,16 @@ namespace System
         public int Length { get; }
 
         public Collections.IEnumerator GetEnumerator();
+    }
+
+    public abstract class Enum : ValueType
+    {
+        protected Enum();
+
+        public static Array GetValues(Type enumType);
+
+        public static object Parse(Type enumType, string value);
+        public static object Parse(Type enumType, string value, bool ignoreCase);        
     }
 
     public struct SByte 

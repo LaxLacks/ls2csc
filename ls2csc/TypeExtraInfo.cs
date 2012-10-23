@@ -108,6 +108,53 @@ namespace LS2IL
                 }
             }
 
+            public void Add(EnumMemberDeclarationSyntax node)
+            {
+                /*        // Summary:
+        //     Gets the attribute declaration list.
+        public SyntaxList<AttributeListSyntax> AttributeLists { get; }
+        public EqualsValueClauseSyntax EqualsValue { get; }
+        //
+        // Summary:
+        //     Gets the identifier.
+        public SyntaxToken Identifier { get; }
+                 */
+                // add field info
+
+                TypeExtraInfo tei = Chunk.AddTypeExtraInfo(this.Class);
+                tei.AddEnumMember(node.Identifier.ToString(), node.EqualsValue!=null?node.EqualsValue.Value:null);
+                
+
+
+                /*
+        // Summary:
+        //     Gets the attribute declaration list.
+        public override SyntaxList<AttributeListSyntax> AttributeLists { get; }
+        public override VariableDeclarationSyntax Declaration { get; }
+        //
+        // Summary:
+        //     Gets the modifier list.
+        public override SyntaxTokenList Modifiers { get; }
+        public override SyntaxToken SemicolonToken { get; }                 
+                 */
+
+                // add to metadata for runtime type building
+                FlatArrayBuilder fab = new FlatArrayBuilder();
+
+                fab.Add(FlatValue.Int32((int)ClassMemberType.StaticField));
+                //TypeInfo ti = Chunk.Model.GetTypeInfo(node..Type);
+
+                fab.Add(FlatValue.String(Class.GetFullyQualifiedName()));
+
+                {
+                    FlatArrayBuilder varList = new FlatArrayBuilder();
+                    varList.Add(FlatValue.String(node.Identifier.ToString()));
+                    fab.Add(varList.GetFlatValue());
+                }
+
+                Members.Add(fab.GetFlatValue());
+            }
+
             public void Add(FieldDeclarationSyntax node)
             {
                 // add field info
@@ -255,6 +302,12 @@ namespace LS2IL
                             return;
                         }
                         break;
+                    case SyntaxKind.EnumMemberDeclaration:
+                        {
+                            Add((EnumMemberDeclarationSyntax)node);
+                            return;
+                        }
+                        break;
                 }
                 throw new NotImplementedException();
             }
@@ -327,7 +380,7 @@ namespace LS2IL
         public bool ResolveRuntimeField(string name, out int nField)
         {
             int nValue;
-            if (!FieldNames.TryGetValue(name, out nValue))
+            if (FieldNames.TryGetValue(name, out nValue))
             {
                 nField = GetFullyQualifiedField(nValue);
                 return true;
@@ -339,7 +392,7 @@ namespace LS2IL
         public bool ResolveRuntimeStaticField(string name, out int nField)
         {
             int nValue;
-            if (!StaticFieldNames.TryGetValue(name, out nValue))
+            if (StaticFieldNames.TryGetValue(name, out nValue))
             {
                 nField = GetFullyQualifiedStaticField(nValue);
                 return true;
@@ -370,5 +423,17 @@ namespace LS2IL
             FieldNames.Add(fei.Name, nField);
             Fields.Add(fei);
         }
+
+        public void AddEnumMember(string name, ExpressionSyntax initializer)
+        {
+
+            FieldExtraInfo fei = new FieldExtraInfo() { Name = name, Type = this.Type };
+            fei.Initializer = initializer;
+
+            int nField = StaticFields.Count;
+            StaticFieldNames.Add(fei.Name, nField);
+            StaticFields.Add(fei);
+        }
+
     }
 }
