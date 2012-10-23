@@ -208,6 +208,7 @@ namespace ls2csctest
                 newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
                 newRoot = new FieldInitializerRewriter().Visit(newRoot);
                 newRoot = new ForeachRewriter().Visit(newRoot);
+                newRoot = new AutoImplementedPropertyRewriter().Visit(newRoot);
 
                 tree = SyntaxTree.Create((CompilationUnitSyntax)newRoot);
 
@@ -220,8 +221,10 @@ namespace ls2csctest
                 var root = (CompilationUnitSyntax)tree.GetRoot();
                 syntaxTrees.Add(tree);
                 var compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
+                
                 LS2IL.FlatObjectType.Compilation = compilation;
                 var model = compilation.GetSemanticModel(tree);
+                
 
                 var diags = model.GetDiagnostics();
                 if (diags != null)
