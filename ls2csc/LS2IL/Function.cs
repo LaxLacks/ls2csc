@@ -471,7 +471,24 @@ namespace LS2IL
 
             if (block == null)
             {
-                throw new NotImplementedException("no body");
+                // abstract?
+                if (MethodSymbol.IsAbstract)
+                {
+                    list.Add(FlatStatement.THROW(FlatOperand.LiteralString("Abstract "+MethodSymbol.MethodKind+" Method call")));
+                    return list;
+                }
+
+                throw new NotImplementedException("no body, not abstract!");
+
+                /*
+                // interface?
+                if (this.MethodSymbol.ContainingType.TypeKind == TypeKind.Interface)
+                {
+                    return list;
+                }
+//                else
+//                    
+                 */
             }
 
             PushVariableScope(list);

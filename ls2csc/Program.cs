@@ -2,10 +2,17 @@
 //
 // See something you don't like? Let's improve it.
 //
+#if DEBUG
+//this #define is a convenience thing for me for debugging. sorry if you hate it.
+#define USEPREDEF
+// this one is to catch exceptions with visual studio instead of dumping it to Error. there's probably a built in debug flag...
+//#define OUTPUTEXCEPTIONS
+#else
 //this #define is a convenience thing for me for debugging. sorry if you hate it.
 //#define USEPREDEF
-// uncomment one is to catch exceptions with visual studio instead of dumping it to Error. there's probably a built in debug flag...
+// comment this one to catch exceptions with visual studio instead of dumping it to Error
 #define OUTPUTEXCEPTIONS
+#endif
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -146,6 +153,25 @@ using LavishScript2;
 using LavishScriptAPI;
 namespace ls2csctest
 {
+    public interface ISomeIFace
+    {
+        int SomeMethod();
+        string SomeProperty { get; }
+    }
+
+    public class SomeClass : ISomeIFace
+    {
+        public virtual int SomeMethod()
+        {
+            return 42;
+        }
+
+        public string SomeProperty
+        {
+            get { return ""What is the answer to the question of life, the universe, and everything?""; }
+        }
+    }
+
 	public class Test{
 		public static void Main(){
 			FieldTest ft = new FieldTest();
@@ -166,6 +192,14 @@ namespace ls2csctest
 
                 System.Console.WriteLine(s.Name+"": ""+fname+"" IsStarted=""+s.IsStarted.ToString());
             }
+
+            SomeClass myClass = new SomeClass();
+            if (myClass is ISomeIFace)
+            {
+                ISomeIFace iface = myClass as ISomeIFace;
+                System.Console.WriteLine(iface.SomeProperty+"" ""+iface.SomeMethod());
+            }
+
 /*
             using (LavishScriptObject obj = LavishScript.Objects.GetObject(""InnerSpace""), obj2 = LavishScript.Objects.GetObject(""InnerSpace""))
             {

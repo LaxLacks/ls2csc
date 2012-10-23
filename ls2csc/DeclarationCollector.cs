@@ -98,7 +98,20 @@ namespace ls2csc
 
         public override void VisitInterfaceDeclaration(InterfaceDeclarationSyntax node)
         {
+            LS2IL.TypeExtraInfo.ClassMetadataGenerator wasClass = CurrentClass;
+
+            NamedTypeSymbol s = Chunk.Model.GetDeclaredSymbol(node);
+
+            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s);
+            CurrentClass = tei.MetadataGenerator;
+
+            foreach (MemberDeclarationSyntax mds in node.Members)
+            {
+                CurrentClass.AddMember(mds);
+            }
+
             base.VisitInterfaceDeclaration(node);
+            CurrentClass = wasClass;
         }
 
         public override void VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
