@@ -46,6 +46,7 @@
     <Reference Include="Roslyn.Services.CSharp" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AutoImplementedPropertyRewriter.cs" />
     <Compile Include="DeclarationCollector.cs" />
     <Compile Include="ExtensionMethods.cs" />
     <Compile Include="FieldInitializerRewriter.cs" />
