@@ -519,6 +519,13 @@ namespace LS2IL
             string name = ins.Identifier.ToString();
             switch (si.Symbol.Kind)
             {
+                case SymbolKind.NamedType:
+                    {
+                        FlatOperand fop_type = Resolve((TypeSymbol)si.Symbol, null, instructions);
+
+                        return fop_type;
+                    }
+                    break;
                 case SymbolKind.Local:
                     {
                         int nRegister;
@@ -1454,6 +1461,16 @@ namespace LS2IL
                         instructions.Add(FlatStatement.SUB(into_lvalue, fop_left, fop_right));
                     }
                     break;
+                case SyntaxKind.AsExpression:
+                    {
+                        instructions.Add(FlatStatement.AS(into_lvalue, fop_left, fop_right));
+                    }
+                    break;
+                case SyntaxKind.IsExpression:
+                    {
+                        instructions.Add(FlatStatement.IS(into_lvalue, fop_left, fop_right));
+                    }
+                    break;
                 default:
                     throw new NotImplementedException("unhandled assignment operator");
                     break;
@@ -2159,6 +2176,16 @@ namespace LS2IL
                             return;
                         }
                         break;
+                    case SyntaxKind.IsExpression:
+                        {
+                            FlatOperand fop_result = ResolveExpression(expr, null, instructions);
+                            if (ss_jump_if_value)
+                                instructions.Add(FlatStatement.JNZ(FlatOperand.LabelRef(ss_jump_label), fop_result));
+                            else
+                                instructions.Add(FlatStatement.JZ(FlatOperand.LabelRef(ss_jump_label), fop_result));
+                        }
+                        return;
+
                 }
 
                 FlatOperand opnd_left = ResolveExpression(condition.Left, null, instructions);
@@ -2208,6 +2235,19 @@ namespace LS2IL
 
                 throw new NotImplementedException();
             }
+
+            TypeInfo ti = Model.GetTypeInfo(expr);
+            if (ti.ConvertedType.SpecialType == SpecialType.System_Boolean)
+            {
+                FlatOperand fop_result = ResolveExpression(expr, null, instructions);
+                if (ss_jump_if_value)
+                    instructions.Add(FlatStatement.JNZ(FlatOperand.LabelRef(ss_jump_label), fop_result));
+                else
+                    instructions.Add(FlatStatement.JZ(FlatOperand.LabelRef(ss_jump_label), fop_result));
+                return;
+
+            }
+
             throw new NotImplementedException();
         }
         #endregion
@@ -2353,6 +2393,7 @@ namespace LS2IL
 
         public void Flatten(ForEachStatementSyntax node, List<FlatStatement> instructions)
         {
+			// foreach is unrolled by a rewriter. we should never get this.
             throw new NotImplementedException("foreach");
         }
 
@@ -2645,7 +2686,7 @@ namespace LS2IL
             throw new NotImplementedException("goto");
         }
         public void Flatten(UsingStatementSyntax node, List<FlatStatement> instructions)
-        {
+        {            
             /*
         public SyntaxToken CloseParenToken { get; }
         public VariableDeclarationSyntax Declaration { get; }
@@ -2654,8 +2695,87 @@ namespace LS2IL
         public StatementSyntax Statement { get; }
         public SyntaxToken UsingKeyword { get; }
              */
+
+            //node.Declaration
+
+
+            // set new exception handler
+            string tryPrefix = this.MakeUniqueLabelPrefix("try");
+            string ehbeginLabel = tryPrefix + "begin";
+            string ehendLabel = tryPrefix + "end";
+            string finallyLabel = tryPrefix + "finally";
+
+            List<FlatOperand> fop_subjects = new List<FlatOperand>();
+            if (node.Expression != null)
+            {
+                fop_subjects.Add(ResolveExpression(node.Expression, null, instructions));
+            }
+            else
+            {
+                TypeInfo ti = Model.GetTypeInfo(node.Declaration.Type);
+
+                foreach (VariableDeclaratorSyntax vds in node.Declaration.Variables)
+                {
+                    Flatten(ti.Type, vds, instructions);
+
+                    string name = vds.Identifier.ToString();
+                    int nRegister;
+                    if (!CurrentVariableScope.Resolve(name, out nRegister))
+                    {
+                        throw new NotImplementedException("Unresolved local symbol " + name);
+                    }
+                    FlatValue retval = FlatValue.Null();
+                    fop_subjects.Add(FlatOperand.RegisterRef(nRegister, retval));
+                }              
+            }
             
-            throw new NotImplementedException("using");
+
+            instructions.Add(FlatStatement.TRY(FlatOperand.LabelRef(ehbeginLabel), FlatOperand.LabelRef(finallyLabel)));
+
+            FlattenStatement(node.Statement, instructions);
+            // leave will be injected later!
+            /*
+            if (node.Finally != null)
+            {
+                instructions.Add(FlatStatement.LEAVE());
+            }
+            /**/
+
+            // jump past exception handler
+            instructions.Add(FlatStatement.JMP(FlatOperand.LabelRef(ehendLabel)));
+
+            // flatten exception handler
+            instructions.Add(FlatStatement.LABEL(FlatOperand.LabelRef(ehbeginLabel)));
+
+            // leave will be injected later
+            /*
+            if (node.Finally != null)
+            {
+                instructions.Add(FlatStatement.LEAVE());
+            }
+            /**/
+
+            instructions.Add(FlatStatement.THROW(FlatOperand.ExceptionRef()));
+
+            instructions.Add(FlatStatement.LABEL(FlatOperand.LabelRef(finallyLabel)));
+
+            // Dispose the subjects
+            foreach (FlatOperand fop_subject in fop_subjects)
+            {
+                // note: the runtime type is not guaranteed to be the type specified by the expression, just a descendant. using TypeOf we will get the right Dispose method ;)
+                FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
+                FlatOperand fop_disposemethod = AllocateRegister("");
+                instructions.Add(FlatStatement.RESOLVEMETHOD(fop_disposemethod.GetLValue(this, instructions), fop_type, FlatOperand.LiteralString("Dispose{}")));
+                instructions.Add(FlatStatement.FASTCALLMETHOD(fop_disposemethod, fop_subject));
+            }
+
+            instructions.Add(FlatStatement.ENDFINALLY());
+
+            instructions.Add(FlatStatement.LABEL(FlatOperand.LabelRef(ehendLabel)));
+
+//            FlattenStatement(node.Statement, instructions);
+            
+//            throw new NotImplementedException("using");
         }
 
         public void Flatten(LockStatementSyntax node, List<FlatStatement> instructions)

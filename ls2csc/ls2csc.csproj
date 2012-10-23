@@ -50,6 +50,7 @@
     <Compile Include="ExtensionMethods.cs" />
     <Compile Include="FieldInitializerRewriter.cs" />
     <Compile Include="FinallyInjectLeaves.cs" />
+    <Compile Include="ForEachRewriter.cs" />
     <Compile Include="Intrinsics.cs" />
     <EmbeddedResource Include="Libraries\LavishScript2.cs" />
     <Compile Include="Options\Options.cs" />

@@ -85,7 +85,7 @@ namespace ls2csc
         static void Main(string[] args)
         {
             System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
-            System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121021.1");
+            System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121022.1");
 
             String inputfile = "";
             String outputfile = "";
@@ -143,6 +143,7 @@ your ls2 filename: <preloaded> IsStarted=true
 */
 using System;
 using LavishScript2;
+using LavishScriptAPI;
 namespace ls2csctest
 {
 	public class Test{
@@ -150,13 +151,8 @@ namespace ls2csctest
 			FieldTest ft = new FieldTest();
 			ft.Test();
 
-            Script[] scripts = Script.AllScripts;
-            int count = scripts.Length;
-            for (int i = 0 ; i < count ; i++) // foreach is not yet implemented by the compiler. so sue me.
-            {
-                Script s = scripts[i];
-            
-                
+            foreach(Script s in Script.AllScripts)
+            {               
                 string fname;
 
                 try
@@ -170,6 +166,12 @@ namespace ls2csctest
 
                 System.Console.WriteLine(s.Name+"": ""+fname+"" IsStarted=""+s.IsStarted.ToString());
             }
+/*
+            using (LavishScriptObject obj = LavishScript.Objects.GetObject(""InnerSpace""), obj2 = LavishScript.Objects.GetObject(""InnerSpace""))
+            {
+               System.Console.WriteLine(""InnerSpace.Build==""+obj.GetMember(""Build"").ToString());
+            }
+*/
 		}
 	}
 	
@@ -205,6 +207,7 @@ namespace ls2csctest
                 newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
                 newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
                 newRoot = new FieldInitializerRewriter().Visit(newRoot);
+                newRoot = new ForeachRewriter().Visit(newRoot);
 
                 tree = SyntaxTree.Create((CompilationUnitSyntax)newRoot);
 

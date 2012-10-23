@@ -3,6 +3,26 @@
 // This stuff will ideally match the C# standards pretty closely... we would like code to cross-compile between ls2csc, .NET and Roslyn, Mono, etc.
 namespace System
 {
+    public interface IDisposable
+    {
+        void Dispose();
+    }
+
+    namespace Collections
+    {
+        public interface IEnumerable
+        {
+            IEnumerator GetEnumerator();
+        }
+
+        public interface IEnumerator
+        {
+            object Current { get; }
+            bool MoveNext();
+            void Reset();
+        }
+    }
+
     class Attribute
     {
     }
@@ -19,11 +39,13 @@ namespace System
         public string Name { get; set; }
     }
 
-    public abstract class Array
+    public abstract class Array : Collections.IEnumerable
     {
         // this will translate into the LEN instruction, rather than a property access
         [LS2Intrinsic("Array.Length")]
         public int Length { get; }
+
+        public Collections.IEnumerator GetEnumerator();
     }
 
     public struct SByte 

@@ -266,7 +266,14 @@ namespace LS2IL
         {
             return new FlatStatement(Instruction.NULLIFY, lvalue_min, lvalue_max);
         }
-
+        public static FlatStatement AS(FlatOperand lvalue, FlatOperand subject, FlatOperand as_type)
+        {
+            return new FlatStatement(Instruction.AS, lvalue, subject, as_type);
+        }
+        public static FlatStatement IS(FlatOperand lvalue, FlatOperand subject, FlatOperand is_type)
+        {
+            return new FlatStatement(Instruction.IS, lvalue, subject, is_type);
+        }
         public static FlatStatement ADD(FlatOperand lvalue, FlatOperand left, FlatOperand right)
         {
             return new FlatStatement(Instruction.ADD, lvalue, left, right);
@@ -703,6 +710,9 @@ namespace LS2IL
         FLOATVAL,
         STRINGVAL,
         BINARYVAL,
+
+        IS,
+        AS,
 
         // unused stuff
         //		ASSIGN,	 // assigns a new value to the LS2CodeBoxValue...

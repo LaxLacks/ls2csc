@@ -2,7 +2,7 @@
 // The implementations of these functions are provided during runtime; code implementation here is not necessary and will be ignored.
 namespace LavishScriptAPI
 {
-    class LavishScriptObject
+    class LavishScriptObject : System.IDisposable
     {
         public void Invalidate();
         public void Dispose();
