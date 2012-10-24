@@ -33,27 +33,9 @@ namespace ls2csc
              */
             string itername = node.Identifier.ToString() + "__iter";
 
-            string new_block = @"
-{
-    var " + itername + @" = " + node.Expression.ToString() + @".GetEnumerator();
-    using(" + itername + @" as IDisposable) 
-    {
-        if(" + itername + @".MoveNext()) 
-        {
-            do
-            {
-                " + node.Type.ToString() + " " + node.Identifier.ToString() + @" = (" + node.Type.ToString() + ")" + itername + @".Current;
-                " + node.Statement.ToString() + @"
-            }
-            while(" + itername + @".MoveNext());
-        }
-    }              
-}";
-
-            return Syntax.ParseStatement(new_block);
-            // umm.. easier to have it parsed. ;)
-            /*
-            return Syntax.Block
+            return base.Visit
+            (
+                Syntax.Block
                 (
                     Syntax.LocalDeclarationStatement
                     (
@@ -61,23 +43,23 @@ namespace ls2csc
                         (
                             Syntax.IdentifierName
                             (
-                                Syntax.Token(SyntaxKind.TypeVarKeyword)
+                                "var"
                             ),
                             Syntax.SeparatedList<VariableDeclaratorSyntax>
                             (
                                 Syntax.VariableDeclarator
                                 (
-                                    Syntax.Identifier("__iter"), 
+                                    Syntax.Identifier(itername),
                                     null,
                                     Syntax.EqualsValueClause
                                     (
-                                        Syntax.Token(SyntaxKind.EqualsToken), 
+                                        Syntax.Token(SyntaxKind.EqualsToken),
                                         Syntax.InvocationExpression
                                         (
                                             Syntax.MemberAccessExpression
                                             (
-                                                SyntaxKind.MemberAccessExpression, 
-                                                node.Expression, 
+                                                SyntaxKind.MemberAccessExpression,
+                                                node.Expression,
                                                 Syntax.IdentifierName("GetEnumerator")
                                             )
                                         )
@@ -86,9 +68,79 @@ namespace ls2csc
                             )
                         )
                     ),
+                    Syntax.UsingStatement
+                    (
+                        null,
+                        Syntax.CastExpression
+                        (
+                            Syntax.ParseTypeName("System.IDisposable"),
+                            Syntax.IdentifierName(itername)
+                        ),
+                        Syntax.Block
+                        (
+                            Syntax.IfStatement
+                            (
+                                Syntax.InvocationExpression
+                                (
+                                    Syntax.MemberAccessExpression
+                                    (
+                                        SyntaxKind.MemberAccessExpression,
+                                        Syntax.IdentifierName(itername),
+                                        Syntax.IdentifierName("MoveNext")
+                                    )
+                                ),
+                                Syntax.Block
+                                (
+                                    Syntax.DoStatement
+                                    (
+                                        Syntax.Block
+                                        (
+                                            Syntax.LocalDeclarationStatement
+                                            (
+                                                Syntax.VariableDeclaration
+                                                (
+                                                    node.Type, 
+                                                    Syntax.SeparatedList<VariableDeclaratorSyntax>
+                                                    (
+                                                        Syntax.VariableDeclarator
+                                                        (
+                                                            node.Identifier,
+                                                            null,
+                                                            Syntax.EqualsValueClause
+                                                            (
+                                                                Syntax.CastExpression
+                                                                (
+                                                                    node.Type,
+                                                                    Syntax.MemberAccessExpression
+                                                                    (
+                                                                        SyntaxKind.MemberAccessExpression,
+                                                                        Syntax.IdentifierName(itername),
+                                                                        Syntax.IdentifierName("Current")
+                                                                    )
+                                                                )
+                                                            )
+                                                        )
+                                                    )
+                                                )
+                                            ),
+                                            node.Statement
+                                        ),
+                                        Syntax.InvocationExpression(
+                                            Syntax.MemberAccessExpression
+                                            (
+                                                SyntaxKind.MemberAccessExpression,
+                                                Syntax.IdentifierName(itername),
+                                                Syntax.IdentifierName("MoveNext")
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            ).NormalizeWhitespace();
 
-                );
-             */
         }
     }
 
