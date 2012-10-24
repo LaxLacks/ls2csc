@@ -998,7 +998,7 @@ namespace LS2IL
 
             if (si.Symbol.IsImplicitlyDeclared)
             {
-                Chunk.AddFunction((MethodSymbol)si.Symbol);
+                Chunk.AddFunction((MethodSymbol)si.Symbol, Model);
             }
 
             FlatOperand fop_constructor = Resolve((MethodSymbol)si.Symbol,fop_type,null,instructions);

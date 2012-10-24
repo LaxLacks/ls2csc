@@ -10,11 +10,13 @@ namespace ls2csc
 {
     class MethodCollector : SyntaxWalker
     {
-        public MethodCollector(Chunk chunk)
+        public MethodCollector(Chunk chunk, SemanticModel model)
         {
             Chunk = chunk;
+            Model = model;
         }
         public Chunk Chunk { get; private set; }
+        public SemanticModel Model { get; private set; }
 
         public override void Visit(SyntaxNode node)
         {
@@ -24,25 +26,25 @@ namespace ls2csc
         public override void VisitConstructorDeclaration(ConstructorDeclarationSyntax node)
         {
             base.VisitConstructorDeclaration(node);
-            Chunk.AddFunction(node);
+            Chunk.AddFunction(node, Model);
         }
 
         public override void VisitDestructorDeclaration(DestructorDeclarationSyntax node)
         {
             base.VisitDestructorDeclaration(node);
-            Chunk.AddFunction(node);
+            Chunk.AddFunction(node, Model);
         }
 
         public override void VisitAccessorDeclaration(AccessorDeclarationSyntax node)
         {
             base.VisitAccessorDeclaration(node);
-            Chunk.AddFunction(node);
+            Chunk.AddFunction(node, Model);
         }
 
         public override void VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
             base.VisitMethodDeclaration(node);
-            Chunk.AddFunction(node);
+            Chunk.AddFunction(node, Model);
         }
 
     }    

@@ -94,12 +94,13 @@ namespace ls2csc
             System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
             System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121023.1");
 
-            String inputfile = "";
+            List<String> inputfiles = new List<String>();
+            List<SyntaxTree> inputtrees = new List<SyntaxTree>();
             String outputfile = "";
             bool help = false;
 
             OptionSet Options = new OptionSet(){
-                {"i|input=", "Input {file}", v => { inputfile = v; }},
+                {"i|input=", "Input {file}", v => { inputfiles.Add(v); }},
                 {"o|output=", "Output {file}", v => { outputfile = v; }},
                 {"h|?|help", "Show this help and exit", v => { help = (v != null); }},
             };
@@ -127,13 +128,14 @@ namespace ls2csc
             // TODO: manage args. multiple input files, use as reference (e.g. Libraries/LavishScriptAPI.cs), etc. 
             //       Roslyn supports #r directive for references. May be able to support that too.
 
-            // to hold the syntax tree from the input file.
-            SyntaxTree tree;
 
-            if (inputfile != "")
+            if (inputfiles.Count != 0)
             {
-                System.Console.Error.WriteLine("Attempting to compile from file '" + inputfile + "'");
-                tree = SyntaxTree.ParseFile(inputfile);
+                foreach (string inputfile in inputfiles)
+                {
+                    System.Console.Error.WriteLine("Attempting to compile from file '" + inputfile + "'");
+                    inputtrees.Add(SyntaxTree.ParseFile(inputfile));
+                }
             }
             else
             {
@@ -227,7 +229,7 @@ namespace ls2csctest
 #if USEPREDEF
                 System.Console.WriteLine("Attempting to compile from pre-defined text:");
                 System.Console.WriteLine(predef);
-                tree = SyntaxTree.ParseText(predef);
+                inputtrees.Add(SyntaxTree.ParseText(predef));
 #endif
             }
 
@@ -236,15 +238,6 @@ namespace ls2csctest
 #endif
             {
                 // get libraries!
-                SyntaxNode newRoot = tree.GetRoot();
-
-                newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
-                newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
-                newRoot = new FieldInitializerRewriter().Visit(newRoot);
-                newRoot = new ForeachRewriter().Visit(newRoot);
-                newRoot = new AutoImplementedPropertyRewriter().Visit(newRoot);
-
-                tree = SyntaxTree.Create((CompilationUnitSyntax)newRoot);
 
                 List<SyntaxTree> syntaxTrees = new List<SyntaxTree>();
 
@@ -252,39 +245,73 @@ namespace ls2csctest
                 syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.LavishScript2.cs")));
                 syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.System.cs")));
 
-                var root = (CompilationUnitSyntax)tree.GetRoot();
-                syntaxTrees.Add(tree);
-                var compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
-                
-                LS2IL.FlatObjectType.Compilation = compilation;
-                var model = compilation.GetSemanticModel(tree);
-                
+                // detect errors!
+                Compilation compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
 
-                var diags = model.GetDiagnostics();
-                if (diags != null)
+                
+                compilation = compilation.AddSyntaxTrees(inputtrees);
+                int nErrors = 0;
+                foreach (SyntaxTree tree in inputtrees)
                 {
-                    int nErrors = 0;
-                    foreach (Diagnostic d in diags)
+                    SemanticModel model = compilation.GetSemanticModel(tree);
+                    IEnumerable<Diagnostic> diags;
+                    if ((diags = model.GetDiagnostics())!=null)
                     {
-                        if (d.Info.Severity == DiagnosticSeverity.Error)
+                        foreach (Diagnostic diag in diags)
                         {
-                            nErrors++;
+                            if (diag.Info.Severity == DiagnosticSeverity.Error)
+                            {
+                                nErrors++;
+                            }
+                            System.Console.Error.WriteLine(diag.ToString());
                         }
-                        System.Console.Error.WriteLine(d.ToString());
-                    }
-                    if (nErrors > 0)
-                    {
-                        System.Console.Error.WriteLine("Fix " + nErrors.ToString() + " errors. :(");
-                        return;
+                        
                     }
                 }
+                if (nErrors > 0)
+                {
+                    System.Console.Error.WriteLine("Fix " + nErrors.ToString() + " errors. :(");
+                    return;
+                }
 
-                LS2IL.Chunk chunk = new LS2IL.Chunk(root, compilation, model);
-                MethodCollector mc = new MethodCollector(chunk);
-                mc.Visit(root);
+                // Perform optimizations and language feature rewrites
 
-                DeclarationCollector dc = new DeclarationCollector(chunk);
-                dc.Visit(root);
+                List<SyntaxTree> finaltrees = new List<SyntaxTree>();
+
+                foreach (SyntaxTree tree in inputtrees)
+                {
+                    SyntaxNode newRoot = tree.GetRoot();
+
+                    newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
+                    newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
+                    newRoot = new FieldInitializerRewriter().Visit(newRoot);
+                    newRoot = new ForeachRewriter().Visit(newRoot);
+                    newRoot = new AutoImplementedPropertyRewriter().Visit(newRoot);
+
+                    finaltrees.Add(SyntaxTree.Create((CompilationUnitSyntax)newRoot));
+                }
+
+                compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
+                compilation = compilation.AddSyntaxTrees(finaltrees);
+
+                LS2IL.FlatObjectType.Compilation = compilation;
+
+                LS2IL.Chunk chunk = new LS2IL.Chunk(compilation);
+
+                foreach (SyntaxTree tree in finaltrees)
+                {
+
+                    SemanticModel model = compilation.GetSemanticModel(tree);
+
+                    SyntaxNode root = tree.GetRoot();
+
+                    MethodCollector mc = new MethodCollector(chunk, model);
+                    mc.Visit(root);
+                    
+                    DeclarationCollector dc = new DeclarationCollector(chunk, model);
+                    dc.Visit(root);
+
+                }
 
                 chunk.Emit(output);
 
