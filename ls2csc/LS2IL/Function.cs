@@ -1794,15 +1794,19 @@ namespace LS2IL
                         FlatOperand fop_result = this.AllocateRegister("");
                         FlatOperand fop_result_lvalue = fop_result.GetLValue(this, instructions);
 
-                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_property));
+
+
+                        instructions.Add(FlatStatement.GETPROPERTY(fop_result_lvalue, fop_property, fop_subject));
+
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_result));
 
                         switch (pues.Kind)
                         {
                             case SyntaxKind.PostIncrementExpression:
-                                instructions.Add(FlatStatement.ADD(fop_result_lvalue, fop_property, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                instructions.Add(FlatStatement.ADD(fop_result_lvalue, fop_result, FlatOperand.Immediate(FlatValue.Int32(1))));
                                 break;
                             case SyntaxKind.PostDecrementExpression:
-                                instructions.Add(FlatStatement.SUB(fop_result_lvalue, fop_property, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                instructions.Add(FlatStatement.SUB(fop_result_lvalue, fop_result, FlatOperand.Immediate(FlatValue.Int32(1))));
                                 break;
                         }
 
