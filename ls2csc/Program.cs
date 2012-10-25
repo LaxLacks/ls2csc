@@ -91,21 +91,26 @@ namespace ls2csc
     {
         static void Main(string[] args)
         {
-            System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
-            System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121023.1");
-
             List<String> inputfiles = new List<String>();
             List<SyntaxTree> inputtrees = new List<SyntaxTree>();
             String outputfile = "";
             bool help = false;
+            int silence = 0;
 
             OptionSet Options = new OptionSet(){
                 {"i|input=", "Input {file}", v => { inputfiles.Add(v); }},
                 {"o|output=", "Output {file}", v => { outputfile = v; }},
                 {"h|?|help", "Show this help and exit", v => { help = (v != null); }},
+                {"s|silent", "Silence, 1 per level", v => { silence++; }}
             };
 
             Options.Parse(args);
+
+            if (silence <= 0)
+            {
+                System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
+                System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121023.1");
+            }
 
             if (help)
             {
@@ -133,7 +138,10 @@ namespace ls2csc
             {
                 foreach (string inputfile in inputfiles)
                 {
-                    System.Console.Error.WriteLine("Attempting to compile from file '" + inputfile + "'");
+                    if (silence <= 0)
+                    {
+                        System.Console.Error.WriteLine("Attempting to compile from file '" + inputfile + "'");
+                    }
                     inputtrees.Add(SyntaxTree.ParseFile(inputfile));
                 }
             }
@@ -227,7 +235,10 @@ namespace ls2csctest
 #endif
 
 #if USEPREDEF
-                System.Console.WriteLine("Attempting to compile from pre-defined text:");
+                if (silence <= 0)
+                {
+                    System.Console.WriteLine("Attempting to compile from pre-defined text:");
+                }
                 System.Console.WriteLine(predef);
                 inputtrees.Add(SyntaxTree.ParseText(predef));
 #endif
@@ -263,7 +274,23 @@ namespace ls2csctest
                             {
                                 nErrors++;
                             }
-                            System.Console.Error.WriteLine(diag.ToString());
+                            int neededSilence = 1;
+                            switch (diag.Info.Severity)
+                            {
+                                case DiagnosticSeverity.Error:
+                                    neededSilence = 3;
+                                    break;
+                                case DiagnosticSeverity.Warning:
+                                    neededSilence = 2;
+                                    break;
+                                case DiagnosticSeverity.Info:
+                                    neededSilence = 1;
+                                    break;
+                            }
+                            if (silence <= neededSilence)
+                            {
+                                System.Console.Error.WriteLine(diag.ToString());
+                            }
                         }
                         
                     }
