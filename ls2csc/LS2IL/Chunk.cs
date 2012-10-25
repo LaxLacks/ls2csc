@@ -12,11 +12,9 @@ namespace LS2IL
 {
     class Chunk
     {
-        public Chunk(CompilationUnitSyntax root, Compilation compilation, SemanticModel model)
+        public Chunk(Compilation compilation)
         {
-            Root = root;
             Compilation = compilation;
-            Model = model;
 
             Functions = new Dictionary<MethodSymbol, LS2IL.Function>();
             FunctionsByNumber = new List<LS2IL.Function>();
@@ -29,13 +27,8 @@ namespace LS2IL
             MetaValues.Add("Build Date", FlatValue.String(DateTime.UtcNow.ToString()+" UTC"));
             MetaValues.Add("Compiler", FlatValue.String("ls2csc"));
             MetaValues.Add("Language", FlatValue.String("C#"));
-
-
-
         }
 
-        public SemanticModel Model { get; private set; }
-        public CompilationUnitSyntax Root { get; private set; }
         public Compilation Compilation { get; private set; }
 
         public List<FlatValue> ChunkValues { get; private set; }
@@ -66,43 +59,43 @@ namespace LS2IL
         /// </summary>
         /// <param name="sym"></param>
         /// <returns></returns>
-        public TypeExtraInfo AddTypeExtraInfo(NamedTypeSymbol sym)
+        public TypeExtraInfo AddTypeExtraInfo(NamedTypeSymbol sym, SemanticModel model)
         {
             TypeExtraInfo tei;
             if (TypeExtraInfo.TryGetValue(sym, out tei))
                 return tei;
 
-            tei = new TypeExtraInfo(this,sym);
+            tei = new TypeExtraInfo(this, model, sym);
             TypeExtraInfo.Add(sym, tei);
             return tei;
         }
 
-        public void AddFunction(MethodDeclarationSyntax node)
+        public void AddFunction(MethodDeclarationSyntax node, SemanticModel Model)
         {
             MethodSymbol ms = Model.GetDeclaredSymbol(node);
-            AddFunction(ms);
+            AddFunction(ms, Model);
         }
-        public void AddFunction(ConstructorDeclarationSyntax node)
+        public void AddFunction(ConstructorDeclarationSyntax node, SemanticModel Model)
         {
             MethodSymbol ms = Model.GetDeclaredSymbol(node);
-            AddFunction(ms);
+            AddFunction(ms, Model);
         }
-        public void AddFunction(DestructorDeclarationSyntax node)
+        public void AddFunction(DestructorDeclarationSyntax node, SemanticModel Model)
         {
             MethodSymbol ms = Model.GetDeclaredSymbol(node);
-            AddFunction(ms);
+            AddFunction(ms, Model);
         }
-        public void AddFunction(AccessorDeclarationSyntax node)
+        public void AddFunction(AccessorDeclarationSyntax node, SemanticModel Model)
         {
             MethodSymbol ms = Model.GetDeclaredSymbol(node);
-            AddFunction(ms);
+            AddFunction(ms, Model);
         }
 
         /// <summary>
         /// Adds a function to the chunk, also generating Chunk metadata if MethodSymbol.IsImplicitlyDeclared
         /// </summary>
         /// <param name="ms"></param>
-        public void AddFunction(MethodSymbol ms)
+        public void AddFunction(MethodSymbol ms, SemanticModel Model)
         {
             Function f;
             if (Functions.TryGetValue(ms, out f))
@@ -116,7 +109,7 @@ namespace LS2IL
 
             if (ms.IsImplicitlyDeclared)
             {
-                TypeExtraInfo tei = AddTypeExtraInfo(ms.ContainingType);
+                TypeExtraInfo tei = AddTypeExtraInfo(ms.ContainingType, Model);
                 tei.MetadataGenerator.Add(ms);
             }
         }
