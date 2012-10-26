@@ -48,6 +48,7 @@
   <ItemGroup>
     <Compile Include="AutoImplementedPropertyRewriter.cs" />
     <Compile Include="DeclarationCollector.cs" />
+    <Compile Include="EnumValueRewriter.cs" />
     <Compile Include="ExtensionMethods.cs" />
     <Compile Include="FieldInitializerRewriter.cs" />
     <Compile Include="FinallyInjectLeaves.cs" />

@@ -122,8 +122,7 @@ namespace LS2IL
                 // add field info
 
                 TypeExtraInfo tei = Chunk.AddTypeExtraInfo(this.Class);
-                tei.AddEnumMember(node.Identifier.ToString(), node.EqualsValue!=null?node.EqualsValue.Value:null);
-                
+                tei.AddEnumMember(node.Identifier.ToString(), node.EqualsValue != null ? node.EqualsValue.Value : null);
 
 
                 /*
@@ -150,6 +149,26 @@ namespace LS2IL
                     FlatArrayBuilder varList = new FlatArrayBuilder();
                     varList.Add(FlatValue.String(node.Identifier.ToString()));
                     fab.Add(varList.GetFlatValue());
+                }
+                {
+                    FlatArrayBuilder valueList = new FlatArrayBuilder();
+                    if (node.EqualsValue != null)
+                    {
+                        if (node.EqualsValue.Value.Kind == SyntaxKind.NumericLiteralExpression)
+                        {
+                            valueList.Add(FlatValue.Int32(int.Parse(node.EqualsValue.Value.ToString())));
+                        }
+                        else
+                        {
+                            throw new NotImplementedException("Enum member without numeric literal expression");
+                        }
+                    }
+                    else
+                    {
+                        throw new NotImplementedException("Enum member without numeric literal expression");
+                    }
+
+                    fab.Add(valueList.GetFlatValue());
                 }
 
                 Members.Add(fab.GetFlatValue());

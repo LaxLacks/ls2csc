@@ -47,6 +47,8 @@ namespace LS2IL
         VT_StaticMethod,
         VT_Property,
         VT_StaticProperty,
+        VT_Field,
+        VT_StaticField,
 
         // not real value types:
         VT_Namespace,
@@ -304,13 +306,13 @@ namespace LS2IL
         {
             return new FlatValue() { ValueType = FlatValueType.VT_Property,  Object = value };
         }
-        public static FlatValue StaticProperty(FieldSymbol value)
+        public static FlatValue StaticField(FieldSymbol value)
         {
-            return new FlatValue() { ValueType = FlatValueType.VT_StaticProperty, Object = value };
+            return new FlatValue() { ValueType = FlatValueType.VT_StaticField, Object = value };
         }
-        public static FlatValue Property(FieldSymbol value)
+        public static FlatValue Field(FieldSymbol value)
         {
-            return new FlatValue() { ValueType = FlatValueType.VT_Property,  Object = value };
+            return new FlatValue() { ValueType = FlatValueType.VT_Field,  Object = value };
         }
         public static FlatValue Exception(object value)
         {

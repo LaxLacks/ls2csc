@@ -460,18 +460,31 @@ namespace LS2IL
         {
             return new FlatStatement(Instruction.SETSTATICPROPERTY, property, rvalue);
         }
-        public static FlatStatement GETFIELD(FlatOperand lvalue, FlatOperand subject, FlatOperand field_number)
+        public static FlatStatement GETFIELD(FlatOperand lvalue, FlatOperand field, FlatOperand subject)
         {
             if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
             {
                 throw new NotSupportedException("expected register number (LValue) in left");
             }
 
-            return new FlatStatement(Instruction.GETFIELD, lvalue, subject, field_number);
+            return new FlatStatement(Instruction.GETFIELD, lvalue, field, subject);
         }
-        public static FlatStatement SETFIELD(FlatOperand subject, FlatOperand field_number, FlatOperand rvalue)
+        public static FlatStatement SETFIELD(FlatOperand field, FlatOperand subject, FlatOperand rvalue)
         {
-            return new FlatStatement(Instruction.SETFIELD, subject, field_number, rvalue);
+            return new FlatStatement(Instruction.SETFIELD, field, subject, rvalue);
+        }
+        public static FlatStatement GETSTATICFIELD(FlatOperand lvalue, FlatOperand field_number)
+        {
+            if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
+            {
+                throw new NotSupportedException("expected register number (LValue) in left");
+            }
+
+            return new FlatStatement(Instruction.GETSTATICFIELD, lvalue, field_number);
+        }
+        public static FlatStatement SETSTATICFIELD(FlatOperand field, FlatOperand rvalue)
+        {
+            return new FlatStatement(Instruction.SETSTATICFIELD, field, rvalue);
         }
         public static FlatStatement LEQUAL(FlatOperand lvalue, FlatOperand left, FlatOperand right)
         {
@@ -544,6 +557,22 @@ namespace LS2IL
             return new FlatStatement(Instruction.RESOLVEPROPERTY, lvalue, type, propertyname);
         }
 
+        public static FlatStatement RESOLVEFIELD(FlatOperand lvalue, FlatOperand type, FlatOperand fieldnum)
+        {
+            if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
+            {
+                throw new NotSupportedException("expected register number (LValue) in left");
+            }
+            return new FlatStatement(Instruction.RESOLVEFIELD, lvalue, type, fieldnum);
+        }
+        public static FlatStatement RESOLVESTATICFIELD(FlatOperand lvalue, FlatOperand type, FlatOperand fieldname)
+        {
+            if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
+            {
+                throw new NotSupportedException("expected register number (LValue) in left");
+            }
+            return new FlatStatement(Instruction.RESOLVESTATICFIELD, lvalue, type, fieldname);
+        }
         public static FlatStatement RESOLVESTATICMETHOD(FlatOperand lvalue, FlatOperand type, FlatOperand methodname)
         {
             if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
@@ -769,8 +798,8 @@ namespace LS2IL
 
         RESOLVEMETHOD,
         RESOLVESTATICMETHOD,
-        //		RESOLVEMEMBER,
-        //		RESOLVESTATICMEMBER,
+        RESOLVEFIELD,
+        RESOLVESTATICFIELD,
         RESOLVEPROPERTY,
         RESOLVESTATICPROPERTY,
         CALLMETHOD,
@@ -784,7 +813,9 @@ namespace LS2IL
         SETSTATICPROPERTY,
 
         GETFIELD,
+        GETSTATICFIELD,
         SETFIELD,
+        SETSTATICFIELD,
 
         //		SETMETADATA,
         //		GETMETADATA,

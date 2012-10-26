@@ -92,7 +92,7 @@ namespace ls2csc
         static void Main(string[] args)
         {
             System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
-            System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121023.1");
+            System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121025.1");
 
             String inputfile = "";
             String outputfile = "";
@@ -153,6 +153,12 @@ using LavishScript2;
 using LavishScriptAPI;
 namespace ls2csctest
 {
+    public enum SomeEnum : int
+    {
+        SomeValue=1,
+        SomeOtherValue,
+    }
+
     public interface ISomeIFace
     {
         int SomeMethod();
@@ -161,6 +167,11 @@ namespace ls2csctest
 
     public class SomeClass : ISomeIFace
     {
+        public SomeClass()
+        {
+            MyEnum = SomeEnum.SomeOtherValue;
+        }
+
         public virtual int SomeMethod()
         {
             return 42;
@@ -170,6 +181,8 @@ namespace ls2csctest
         {
             get { return ""What is the answer to the question of life, the universe, and everything?""; }
         }
+
+        public SomeEnum MyEnum { get; set; }
     }
 
 	public class Test{
@@ -197,7 +210,7 @@ namespace ls2csctest
             if (myClass is ISomeIFace)
             {
                 ISomeIFace iface = myClass as ISomeIFace;
-                System.Console.WriteLine(iface.SomeProperty+"" ""+iface.SomeMethod());
+                System.Console.WriteLine(iface.SomeProperty+"" ""+iface.SomeMethod()+"" MyEnum=""+myClass.MyEnum.ToString());
             }
 
 /*
@@ -238,6 +251,7 @@ namespace ls2csctest
                 // get libraries!
                 SyntaxNode newRoot = tree.GetRoot();
 
+                newRoot = new EnumValueRewriter().Visit(newRoot);
                 newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
                 newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
                 newRoot = new FieldInitializerRewriter().Visit(newRoot);
