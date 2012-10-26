@@ -15,12 +15,14 @@ namespace ls2csc
     /// </summary>
     class DeclarationCollector : SyntaxWalker
     {
-        public DeclarationCollector(Chunk chunk)
+        public DeclarationCollector(Chunk chunk, SemanticModel model)
         {
             Chunk = chunk;
+            Model = model;
         }
         public Chunk Chunk { get; private set; }
-      
+        public SemanticModel Model { get; private set; }
+
         public LS2IL.TypeExtraInfo.ClassMetadataGenerator CurrentClass { get; private set; }
 
         public override void Visit(SyntaxNode node)
@@ -32,9 +34,9 @@ namespace ls2csc
         {            
             LS2IL.TypeExtraInfo.ClassMetadataGenerator wasClass = CurrentClass;
 
-            NamedTypeSymbol s = Chunk.Model.GetDeclaredSymbol(node);
+            NamedTypeSymbol s = Model.GetDeclaredSymbol(node);
             
-            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s);
+            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model);
             CurrentClass = tei.MetadataGenerator;
 
             foreach (MemberDeclarationSyntax mds in node.Members)
@@ -113,9 +115,9 @@ namespace ls2csc
         {
             LS2IL.TypeExtraInfo.ClassMetadataGenerator wasClass = CurrentClass;
 
-            NamedTypeSymbol s = Chunk.Model.GetDeclaredSymbol(node);
+            NamedTypeSymbol s = Model.GetDeclaredSymbol(node);
 
-            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s);
+            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model);
             CurrentClass = tei.MetadataGenerator;
 
             foreach (MemberDeclarationSyntax mds in node.Members)

@@ -1062,7 +1062,7 @@ namespace LS2IL
 
             if (si.Symbol.IsImplicitlyDeclared)
             {
-                Chunk.AddFunction((MethodSymbol)si.Symbol);
+                Chunk.AddFunction((MethodSymbol)si.Symbol, Model);
             }
 
             FlatOperand fop_constructor = Resolve((MethodSymbol)si.Symbol,fop_type,null,instructions);
@@ -1942,6 +1942,11 @@ namespace LS2IL
 
                         instructions.Add(FlatStatement.GETPROPERTY(fop_currentlvalue, fop_property, fop_subject));
                         instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
+
+
+                        instructions.Add(FlatStatement.GETPROPERTY(fop_result_lvalue, fop_property, fop_subject));
+
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_result));
 
                         switch (pues.Kind)
                         {
