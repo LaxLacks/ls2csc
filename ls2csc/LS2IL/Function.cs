@@ -1943,11 +1943,6 @@ namespace LS2IL
                         instructions.Add(FlatStatement.GETPROPERTY(fop_currentlvalue, fop_property, fop_subject));
                         instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
 
-
-                        instructions.Add(FlatStatement.GETPROPERTY(fop_result_lvalue, fop_property, fop_subject));
-
-                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_result));
-
                         switch (pues.Kind)
                         {
                             case SyntaxKind.PostIncrementExpression:

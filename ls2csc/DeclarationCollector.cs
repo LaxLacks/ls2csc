@@ -87,9 +87,9 @@ namespace ls2csc
         {
             LS2IL.TypeExtraInfo.ClassMetadataGenerator wasClass = CurrentClass;
 
-            NamedTypeSymbol s = Chunk.Model.GetDeclaredSymbol(node);
+            NamedTypeSymbol s = Model.GetDeclaredSymbol(node);
 
-            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s);
+            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model);
             CurrentClass = tei.MetadataGenerator;
 
             foreach (MemberDeclarationSyntax mds in node.Members)

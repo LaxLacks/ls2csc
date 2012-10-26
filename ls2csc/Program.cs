@@ -109,7 +109,7 @@ namespace ls2csc
             if (silence <= 0)
             {
                 System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
-                System.Console.Error.WriteLine("- Building for LS2IL version 0.7.20121025.1");
+                System.Console.Error.WriteLine("- Building for LS2IL version " + LS2IL.Chunk.LS2ILVersion);
             }
 
             if (help)

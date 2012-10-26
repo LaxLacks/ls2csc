@@ -12,6 +12,8 @@ namespace LS2IL
 {
     class Chunk
     {
+        public const string LS2ILVersion = "0.8.20121026.1";
+
         public Chunk(Compilation compilation)
         {
             Compilation = compilation;
@@ -27,6 +29,7 @@ namespace LS2IL
             MetaValues.Add("Build Date", FlatValue.String(DateTime.UtcNow.ToString()+" UTC"));
             MetaValues.Add("Compiler", FlatValue.String("ls2csc"));
             MetaValues.Add("Language", FlatValue.String("C#"));
+            MetaValues.Add("Environment Version", FlatValue.String(LS2ILVersion));
         }
 
         public Compilation Compilation { get; private set; }

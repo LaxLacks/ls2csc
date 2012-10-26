@@ -124,7 +124,7 @@ namespace LS2IL
                  */
                 // add field info
 
-                TypeExtraInfo tei = Chunk.AddTypeExtraInfo(this.Class);
+                TypeExtraInfo tei = Chunk.AddTypeExtraInfo(this.Class,Model);
                 tei.AddEnumMember(node.Identifier.ToString(), node.EqualsValue != null ? node.EqualsValue.Value : null);
 
 
