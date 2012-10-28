@@ -24,7 +24,7 @@ namespace LS2IL
             FunctionValues = new List<FlatValue>();
             NamedRegisters = new Dictionary<string, int>();
             MetaValues = new Dictionary<string, FlatValue>();
-
+            PackedRegisters = -1;
             InitializeMetadata();
         }
 
@@ -66,6 +66,7 @@ namespace LS2IL
         public string CurrentContinueLabel { get; private set; }
 
         public List<FlatValue> Registers { get; private set; }
+        public int PackedRegisters { get; private set; }
         public Dictionary<string, int> NamedRegisters { get; private set; }
         public VariableScope CurrentVariableScope { get; private set; }
 
@@ -283,9 +284,29 @@ namespace LS2IL
             }
         }
 
-        public void FlattenToInstructions(bool flattenLabels, bool bFilterUnusedInstructions)
+        /// <summary>
+        /// Flattens the C# tree into LS2IL statements
+        /// </summary>
+        /// <param name="flattenLabels">true if the flattened IL should have labels removed, e.g.. for execution (noting that the LS2IL reader does not currently support labels). the output is generally more human-readable by passing false.</param>
+        /// <param name="bFilterUnusedInstructions">ls2csc can detect unused instructions in some cases. pass true to remove the known cases (noting that the compiler purposefully generates unused instructions in many cases).</param>
+        /// <param name="condenseRegisters">true to try to reduce the number of registers used by the generated code. false if it should stay purposefully bloated.</param>
+        public void FlattenToInstructions(bool flattenLabels, bool bFilterUnusedInstructions, bool condenseRegisters)
         {
             List<FlatStatement> list = Flatten();
+
+            if (condenseRegisters)
+            {
+                PackedRegisters = RegisterPacker.Pack(list);
+            }
+            else
+            {
+                PackedRegisters = this.Registers.Count;
+            }
+
+            if (PackedRegisters > 256)
+            {
+                throw new NotImplementedException("Too many registers used in function "+this.MethodSymbol.GetFullyQualifiedName());
+            }
 
             InjectLeaveStatements(list);
 
@@ -425,7 +446,7 @@ namespace LS2IL
             EmitMetaTable(output);
             EmitValues(output);
 
-            output.WriteLine(".registers " + this.Registers.Count.ToString());
+            output.WriteLine(".registers " + PackedRegisters.ToString()+ " ; before packing: " + this.Registers.Count.ToString());
             output.WriteLine("");
 
             EmitInstructions(output);

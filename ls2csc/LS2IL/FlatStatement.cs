@@ -262,10 +262,6 @@ namespace LS2IL
         {
             return new FlatStatement(Instruction.NULLIFY, lvalue, lvalue);
         }
-        public static FlatStatement NULLIFY(FlatOperand lvalue_min, FlatOperand lvalue_max)
-        {
-            return new FlatStatement(Instruction.NULLIFY, lvalue_min, lvalue_max);
-        }
         public static FlatStatement AS(FlatOperand lvalue, FlatOperand subject, FlatOperand as_type)
         {
             return new FlatStatement(Instruction.AS, lvalue, subject, as_type);

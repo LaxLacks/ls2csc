@@ -55,6 +55,7 @@
     <Compile Include="ForEachRewriter.cs" />
     <Compile Include="Intrinsics.cs" />
     <EmbeddedResource Include="Libraries\LavishScript2.cs" />
+    <Compile Include="LS2IL\RegisterPacker.cs" />
     <Compile Include="Options\Options.cs" />
     <Compile Include="TypeExtraInfo.cs" />
     <Compile Include="UnaryToBinaryRewriter.cs" />

@@ -130,10 +130,6 @@ namespace ls2csc
                 output = System.Console.Out;
             }
 
-            // TODO: manage args. multiple input files, use as reference (e.g. Libraries/LavishScriptAPI.cs), etc. 
-            //       Roslyn supports #r directive for references. May be able to support that too.
-
-
             if (inputfiles.Count != 0)
             {
                 foreach (string inputfile in inputfiles)

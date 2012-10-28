@@ -25,7 +25,6 @@ namespace LS2IL
             TypeExtraInfo = new Dictionary<NamedTypeSymbol, TypeExtraInfo>();
             MetaValues = new Dictionary<string, FlatValue>();
 
-            //MetaValues.Add("Author", FlatValue.String("Lax"));
             MetaValues.Add("Build Date", FlatValue.String(DateTime.UtcNow.ToString()+" UTC"));
             MetaValues.Add("Compiler", FlatValue.String("ls2csc"));
             MetaValues.Add("Language", FlatValue.String("C#"));
@@ -173,7 +172,9 @@ namespace LS2IL
             for (int i = 0; i < FunctionsByNumber.Count; i++)
             {
                 LS2IL.Function f = FunctionsByNumber[i];
-                f.FlattenToInstructions(true, true);
+                
+                // TODO: command-line options for these 3 flags
+                f.FlattenToInstructions(true, true, true);
             }
 
             GenerateTypesMetadata();

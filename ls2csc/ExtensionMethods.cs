@@ -148,5 +148,57 @@ namespace LS2IL
             }
             return false;
         }
+
+        public static bool HasLValue(this Instruction instr)
+        {
+            switch (instr)
+            {
+                case Instruction.NULLIFY: // technically it has two.
+                    return true;
+                case Instruction.DUPLICATE:
+                case Instruction.REFERENCE:
+                case Instruction.REREFERENCE:
+                case Instruction.DEREFERENCE:
+                    return true;
+                case Instruction.NOP:
+                case Instruction.JE:
+                case Instruction.JNE:
+                case Instruction.JZ:
+                case Instruction.JNZ:
+                case Instruction.JL:
+                case Instruction.JLE:
+                case Instruction.JG:
+                case Instruction.JGE:
+                case Instruction.JMP:
+                case Instruction.SWITCH:
+                    return false;
+                case Instruction.RETURN:
+                case Instruction.CALL:
+                case Instruction.FASTCALL:
+                case Instruction.CALLMETHOD:
+                case Instruction.CALLSTATICMETHOD:
+                case Instruction.FASTCALLMETHOD:
+                case Instruction.FASTCALLSTATICMETHOD:
+                    return false;
+                case Instruction.SETPROPERTY:
+                case Instruction.ARRAYSET:
+                case Instruction.TABLESET:
+                case Instruction.SETFIELD:
+                case Instruction.SETSTATICFIELD:
+                case Instruction.SETSTATICPROPERTY:
+                    return false;
+                case Instruction.YIELD:
+                case Instruction.ATOMIZE:
+                case Instruction.DEATOMIZE:
+                case Instruction.THROW:
+                case Instruction.UNTHROW:
+                case Instruction.TRY:
+                case Instruction.LEAVE:
+                case Instruction.ENDFINALLY:
+                case Instruction.meta_LABEL:
+                    return false;
+            }
+            return true;
+        }
     }
 }
