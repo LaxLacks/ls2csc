@@ -140,6 +140,8 @@ namespace LS2IL
                                 // ... possibly by spliting it into multiple NULLIFY statements
                                 throw new NotImplementedException("NULLIFY range");
                             }
+                            TouchRegister(InputRegisters, fs.Operands[0].OperandIndex, nInstruction);
+
                             /* 
                             // this is sort of all we need to do but ideally, we should start with individual NULLIFY statements and try to combine them where possible
                             for (int i = from_reg; i <= to_reg_inclusive; i++)
