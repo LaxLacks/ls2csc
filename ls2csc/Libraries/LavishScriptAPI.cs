@@ -2,7 +2,7 @@
 // The implementations of these functions are provided during runtime; code implementation here is not necessary and will be ignored.
 namespace LavishScriptAPI
 {
-    class LavishScriptObject : System.IDisposable
+    public class LavishScriptObject : System.IDisposable
     {
         public void Invalidate();
         public void Dispose();
@@ -21,7 +21,7 @@ namespace LavishScriptAPI
         //public override string ToString(); // this is implied...
     }
 
-    class LavishScript
+    public class LavishScript
     {
         static public void ExecuteCommand(string Command);
         static public string DataParse(string DataSequence);
