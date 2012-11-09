@@ -15,13 +15,15 @@ namespace ls2csc
     /// </summary>
     class DeclarationCollector : SyntaxWalker
     {
-        public DeclarationCollector(Chunk chunk, SemanticModel model)
+        public DeclarationCollector(Chunk chunk, SemanticModel model, bool isLibrary)
         {
             Chunk = chunk;
             Model = model;
+            IsLibrary = isLibrary;
         }
         public Chunk Chunk { get; private set; }
         public SemanticModel Model { get; private set; }
+        public bool IsLibrary { get; private set; }
 
         public LS2IL.TypeExtraInfo.ClassMetadataGenerator CurrentClass { get; private set; }
 
@@ -36,14 +38,13 @@ namespace ls2csc
 
             NamedTypeSymbol s = Model.GetDeclaredSymbol(node);
             
-            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model);
+            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model,IsLibrary);
             CurrentClass = tei.MetadataGenerator;
 
             foreach (MemberDeclarationSyntax mds in node.Members)
             {
                 CurrentClass.AddMember(mds);
             }
-
             base.VisitClassDeclaration(node);
             CurrentClass = wasClass;
         }
@@ -89,7 +90,7 @@ namespace ls2csc
 
             NamedTypeSymbol s = Model.GetDeclaredSymbol(node);
 
-            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model);
+            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model, IsLibrary);
             CurrentClass = tei.MetadataGenerator;
 
             foreach (MemberDeclarationSyntax mds in node.Members)
@@ -117,7 +118,7 @@ namespace ls2csc
 
             NamedTypeSymbol s = Model.GetDeclaredSymbol(node);
 
-            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model);
+            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model, IsLibrary);
             CurrentClass = tei.MetadataGenerator;
 
             foreach (MemberDeclarationSyntax mds in node.Members)

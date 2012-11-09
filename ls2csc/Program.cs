@@ -4,7 +4,7 @@
 //
 #if DEBUG
 //this #define is a convenience thing for me for debugging. sorry if you hate it.
-#define USEPREDEF
+//#define USEPREDEF
 // this one is to catch exceptions with visual studio instead of dumping it to Error. there's probably a built in debug flag...
 //#define OUTPUTEXCEPTIONS
 #else
@@ -91,15 +91,17 @@ namespace ls2csc
     {
         static void Main(string[] args)
         {
-            List<String> inputfiles = new List<String>();
-            List<SyntaxTree> inputtrees = new List<SyntaxTree>();
-            String outputfile = "";
+            List<String> referenceFiles = new List<String>();
+            List<String> inputFiles = new List<String>();
+            List<SyntaxTree> inputTrees = new List<SyntaxTree>();
+            String outputFile = "";
             bool help = false;
             int silence = 0;
 
             OptionSet Options = new OptionSet(){
-                {"i|input=", "Input {file}", v => { inputfiles.Add(v); }},
-                {"o|output=", "Output {file}", v => { outputfile = v; }},
+                {"i|input=", "Input {file}", v => { inputFiles.Add(v); }},
+                {"r|reference=", "Reference {file}", v => { referenceFiles.Add(v); }},
+                {"o|output=", "Output {file}", v => { outputFile = v; }},
                 {"h|?|help", "Show this help and exit", v => { help = (v != null); }},
                 {"s|silent", "Silence, 1 per level", v => { silence++; }}
             };
@@ -121,24 +123,24 @@ namespace ls2csc
 
             TextWriter output;
 
-            if (outputfile != "")
+            if (outputFile != "")
             {
-                output = new StreamWriter(outputfile);
+                output = new StreamWriter(outputFile);
             }
             else
             {
                 output = System.Console.Out;
             }
 
-            if (inputfiles.Count != 0)
+            if (inputFiles.Count != 0)
             {
-                foreach (string inputfile in inputfiles)
+                foreach (string inputfile in inputFiles)
                 {
                     if (silence <= 0)
                     {
                         System.Console.Error.WriteLine("Attempting to compile from file '" + inputfile + "'");
                     }
-                    inputtrees.Add(SyntaxTree.ParseFile(inputfile));
+                    inputTrees.Add(SyntaxTree.ParseFile(inputfile));
                 }
             }
             else
@@ -260,22 +262,43 @@ namespace ls2csctest
                 // get libraries!
 
                 List<SyntaxTree> syntaxTrees = new List<SyntaxTree>();
+                List<SyntaxTree> referenceTrees = new List<SyntaxTree>();
 
-                syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.LavishScriptAPI.cs")));
-                syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.LavishScript2.cs")));
-                syntaxTrees.Add(SyntaxTree.ParseText(Resources.Instance.DeserializeStream("ls2csc.Libraries.System.cs")));
+                #region Metadata == Declarations == "Libraries"
+                string[] auto_reference = { 
+                                              "ls2csc.Libraries.InnerSpaceAPI.cs", 
+                                              "ls2csc.Libraries.LavishScriptAPI.cs", 
+                                              "ls2csc.Libraries.LavishScript2.cs", 
+                                              "ls2csc.Libraries.System.cs" 
+                                          };
 
-                // detect errors!
+                foreach(string s in auto_reference)
+                {
+                    SyntaxTree tree = SyntaxTree.ParseText(Resources.Instance.DeserializeStream(s));
+                    syntaxTrees.Add(tree);
+                    referenceTrees.Add(tree);
+                }
+
+                foreach (string s in referenceFiles)
+                {
+                    SyntaxTree tree = SyntaxTree.ParseFile(s);
+                    syntaxTrees.Add(tree);
+                    referenceTrees.Add(tree);
+                }
+                #endregion
+
                 Compilation compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
 
-                
-                compilation = compilation.AddSyntaxTrees(inputtrees);
+
+                compilation = compilation.AddSyntaxTrees(inputTrees);
+
+                #region Diagnose and display Errors on the original code
                 int nErrors = 0;
-                foreach (SyntaxTree tree in inputtrees)
+                foreach (SyntaxTree tree in inputTrees)
                 {
                     SemanticModel model = compilation.GetSemanticModel(tree);
                     IEnumerable<Diagnostic> diags;
-                    if ((diags = model.GetDiagnostics())!=null)
+                    if ((diags = model.GetDiagnostics()) != null)
                     {
                         foreach (Diagnostic diag in diags)
                         {
@@ -301,7 +324,7 @@ namespace ls2csctest
                                 System.Console.Error.WriteLine(diag.ToString());
                             }
                         }
-                        
+
                     }
                 }
                 if (nErrors > 0)
@@ -309,16 +332,16 @@ namespace ls2csctest
                     System.Console.Error.WriteLine("Fix " + nErrors.ToString() + " errors. :(");
                     return;
                 }
+                #endregion
 
-                // Perform optimizations and language feature rewrites
-
+                #region C# Code Transformations: Optimizations and other rewriters
                 List<SyntaxTree> finaltrees = new List<SyntaxTree>();
 
-                foreach (SyntaxTree tree in inputtrees)
+                foreach (SyntaxTree tree in inputTrees)
                 {
                     SyntaxNode newRoot = tree.GetRoot();
 
-	                newRoot = new EnumValueRewriter().Visit(newRoot);
+                    newRoot = new EnumValueRewriter().Visit(newRoot);
                     newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
                     newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
                     newRoot = new FieldInitializerRewriter().Visit(newRoot);
@@ -327,13 +350,25 @@ namespace ls2csctest
 
                     finaltrees.Add(SyntaxTree.Create((CompilationUnitSyntax)newRoot));
                 }
+                #endregion
 
                 compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
                 compilation = compilation.AddSyntaxTrees(finaltrees);
 
+                #region LS2 IL Code Generation
                 LS2IL.FlatObjectType.Compilation = compilation;
-
                 LS2IL.Chunk chunk = new LS2IL.Chunk(compilation);
+
+                foreach (SyntaxTree tree in referenceTrees)
+                {
+                    SemanticModel model = compilation.GetSemanticModel(tree);
+
+                    SyntaxNode root = tree.GetRoot();
+
+                    // Build up the metadata
+                    DeclarationCollector dc = new DeclarationCollector(chunk, model, true); // isLibrary = true because these are the reference-only trees
+                    dc.Visit(root);
+                }
 
                 foreach (SyntaxTree tree in finaltrees)
                 {
@@ -342,17 +377,19 @@ namespace ls2csctest
 
                     SyntaxNode root = tree.GetRoot();
 
+                    // collect methods and properties to turn into LS2IL.Functions 
                     MethodCollector mc = new MethodCollector(chunk, model);
                     mc.Visit(root);
-                    
-                    DeclarationCollector dc = new DeclarationCollector(chunk, model);
-                    dc.Visit(root);
 
+                    // Build up the metadata
+                    DeclarationCollector dc = new DeclarationCollector(chunk, model, false); // isLibrary = false because these are the trees going into the Chunk
+                    dc.Visit(root);
                 }
 
                 chunk.Emit(output);
-
                 output.WriteLine("");
+                #endregion
+
             }
 #if OUTPUTEXCEPTIONS
             catch (Exception e)

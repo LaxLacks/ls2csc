@@ -19,7 +19,7 @@ namespace LS2IL
 
     class TypeExtraInfo
     {
-        public TypeExtraInfo(Chunk chunk, SemanticModel model, NamedTypeSymbol cls)
+        public TypeExtraInfo(Chunk chunk, SemanticModel model, NamedTypeSymbol cls, bool isLibrary)
         {
             Chunk = chunk;
             Model = model;
@@ -28,22 +28,23 @@ namespace LS2IL
             StaticFields = new List<FieldExtraInfo>();
             FieldNames = new Dictionary<string, int>();
             StaticFieldNames = new Dictionary<string, int>();
-            MetadataGenerator = new ClassMetadataGenerator(chunk, model, cls);
+            MetadataGenerator = new ClassMetadataGenerator(chunk, model, cls,isLibrary);
 
             if (Type.ContainingType != null)
             {
-                Parent = Chunk.AddTypeExtraInfo(Type.ContainingType, Model);
+                Parent = Chunk.AddTypeExtraInfo(Type.ContainingType, Model, isLibrary);
             }
         }
 
         public class ClassMetadataGenerator : FlatTableBuilder
         {
-            public ClassMetadataGenerator(Chunk chunk, SemanticModel model, NamedTypeSymbol cls)
+            public ClassMetadataGenerator(Chunk chunk, SemanticModel model, NamedTypeSymbol cls, bool isLibrary)
             {
                 Chunk = chunk;
                 Class = cls;
                 Model = model;
                 Members = new List<FlatValue>();
+                IsLibrary = isLibrary;
             }
 
             enum ClassMemberType : int
@@ -56,6 +57,7 @@ namespace LS2IL
                 StaticProperty = 6,
             }
 
+            public bool IsLibrary { get; private set; }
             public Chunk Chunk { get; private set; }
             public SemanticModel Model { get; private set; }
             public NamedTypeSymbol Class { get; private set; }
@@ -63,6 +65,8 @@ namespace LS2IL
 
             public void Add(MethodSymbol ms)
             {
+                if (IsLibrary)
+                    return;
                 FlatArrayBuilder fab = new FlatArrayBuilder();
                 fab.Add(FlatValue.Int32(ms.IsStatic ? (int)ClassMemberType.StaticMethod : (int)ClassMemberType.Method));
                 fab.Add(FlatValue.String(ms.GetFullyQualifiedName()));
@@ -80,6 +84,8 @@ namespace LS2IL
 
             public void Add(ConstructorDeclarationSyntax node)
             {
+                if (IsLibrary)
+                    return;
                 Add(Model.GetDeclaredSymbol(node));
                 /*
                 FlatArrayBuilder fab = new FlatArrayBuilder();
@@ -101,14 +107,19 @@ namespace LS2IL
 
             public void Add(SyntaxTokenList modifiers, VariableDeclarationSyntax decl)
             {
-                TypeExtraInfo tei = Chunk.AddTypeExtraInfo(this.Class, Model);
-
-
+                TypeExtraInfo tei = Chunk.AddTypeExtraInfo(this.Class, Model, IsLibrary);
                 foreach (VariableDeclaratorSyntax vds in decl.Variables)
                 {
                     TypeInfo ti = Model.GetTypeInfo(decl.Type);
                     tei.AddField(modifiers, ti.ConvertedType, vds);
                 }
+            }
+
+            public void Add(IndexerDeclarationSyntax node)
+            {
+                if (IsLibrary)
+                    return;
+                throw new NotImplementedException("indexer");
             }
 
             public void Add(EnumMemberDeclarationSyntax node)
@@ -124,7 +135,7 @@ namespace LS2IL
                  */
                 // add field info
 
-                TypeExtraInfo tei = Chunk.AddTypeExtraInfo(this.Class,Model);
+                TypeExtraInfo tei = Chunk.AddTypeExtraInfo(this.Class,Model, IsLibrary);
                 tei.AddEnumMember(node.Identifier.ToString(), node.EqualsValue != null ? node.EqualsValue.Value : null);
 
 
@@ -223,6 +234,9 @@ namespace LS2IL
 
             public void Add(PropertyDeclarationSyntax node)
             {
+                if (IsLibrary)
+                    return;
+
                 Symbol s = Model.GetDeclaredSymbol(node);
                 Function fGet = null;
                 Function fSet = null;
@@ -261,6 +275,10 @@ namespace LS2IL
                 //fab.Add(FlatValue.Int32((int)ClassMemberType.Property));
                 fab.Add(FlatValue.String(node.Identifier.ToString()));
 
+                TypeInfo ti = Model.GetTypeInfo(node.Type);
+
+                fab.Add(FlatValue.String(ti.ConvertedType.GetFullyQualifiedName()));
+
                 if (fGet == null)
                     fab.Add(FlatValue.Null());
                 else
@@ -274,8 +292,22 @@ namespace LS2IL
                 Members.Add(fab.GetFlatValue());
             }
 
+            public void Add(ClassDeclarationSyntax node)
+            {
+                //throw new NotImplementedException();
+                // nothing technically to do here atm?
+            }
+
+            public void Add(StructDeclarationSyntax node)
+            {
+                //throw new NotImplementedException();
+                // nothing technically to do here atm?
+            }
+
             public void Add(MethodDeclarationSyntax node)
             {
+                if (IsLibrary)
+                    return;
                 FlatArrayBuilder fab = new FlatArrayBuilder();
 
                 MethodSymbol s = Model.GetDeclaredSymbol(node);
@@ -327,6 +359,24 @@ namespace LS2IL
                     case SyntaxKind.EnumMemberDeclaration:
                         {
                             Add((EnumMemberDeclarationSyntax)node);
+                            return;
+                        }
+                        break;
+                    case SyntaxKind.IndexerDeclaration:
+                        {
+                            Add((IndexerDeclarationSyntax)node);
+                            return;
+                        }
+                        break;
+                    case SyntaxKind.ClassDeclaration:
+                        {
+                            Add((ClassDeclarationSyntax)node);
+                            return;
+                        }
+                        break;
+                    case SyntaxKind.StructDeclaration:
+                        {
+                            Add((StructDeclarationSyntax)node);
                             return;
                         }
                         break;
@@ -435,16 +485,25 @@ namespace LS2IL
             //bool bStatic = false;
             if (modifiers.ToString().Contains("static"))
             {
-                throw new NotImplementedException("static field declaration");
+                FieldExtraInfo fei = new FieldExtraInfo() { Name = vds.Identifier.ToString(), Type = type };
+                if (vds.Initializer != null)
+                    fei.Initializer = vds.Initializer.Value;
+
+                int nField = StaticFields.Count;
+                StaticFieldNames.Add(fei.Name, nField);
+                StaticFields.Add(fei);
+                return;
             }
+            else
+            {
+                FieldExtraInfo fei = new FieldExtraInfo() { Name = vds.Identifier.ToString(), Type = type };
+                if (vds.Initializer != null)
+                    fei.Initializer = vds.Initializer.Value;
 
-            FieldExtraInfo fei = new FieldExtraInfo() { Name = vds.Identifier.ToString(), Type = type };
-            if (vds.Initializer != null)
-                fei.Initializer = vds.Initializer.Value;
-
-            int nField = Fields.Count;
-            FieldNames.Add(fei.Name, nField);
-            Fields.Add(fei);
+                int nField = Fields.Count;
+                FieldNames.Add(fei.Name, nField);
+                Fields.Add(fei);
+            }
         }
 
         public void AddEnumMember(string name, ExpressionSyntax initializer)

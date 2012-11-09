@@ -550,7 +550,7 @@ namespace LS2IL
             return into_lvalue.AsRValue(FlatValue.Type(type));
         }
 
-        public FlatOperand Resolve(IdentifierNameSyntax ins, TypeInfo result_type, List<FlatStatement> instructions)
+        public FlatOperand Resolve(IdentifierNameSyntax ins, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             SymbolInfo si = Model.GetSymbolInfo(ins);
 
@@ -559,7 +559,12 @@ namespace LS2IL
             {
                 case SymbolKind.NamedType:
                     {
-                        FlatOperand fop_type = Resolve((TypeSymbol)si.Symbol, null, instructions);
+                        FlatOperand fop_type = Resolve((TypeSymbol)si.Symbol, into_lvalue, instructions);
+
+                        if (into_lvalue != null)
+                        {
+                            instructions.Add(FlatStatement.REFERENCE(into_lvalue, fop_type));
+                        }
 
                         return fop_type;
                     }
@@ -572,7 +577,13 @@ namespace LS2IL
                             throw new NotImplementedException("Unresolved local symbol " + name);
                         }
                         FlatValue retval = FlatValue.Null();
-                        return FlatOperand.RegisterRef(nRegister, retval);
+                        FlatOperand fop_local = FlatOperand.RegisterRef(nRegister, retval);
+
+                        if (into_lvalue != null)
+                        {
+                            instructions.Add(FlatStatement.REFERENCE(into_lvalue, fop_local));
+                        }
+                        return fop_local;
                     }
                     break;
                 case SymbolKind.Parameter:
@@ -586,7 +597,13 @@ namespace LS2IL
                             if (name == ps.Name)
                             {
                                 FlatValue retval = FlatValue.FromType(ps.Type);
-                                return FlatOperand.InputRef(nParameter, retval);
+                                FlatOperand fop_input = FlatOperand.InputRef(nParameter, retval);
+
+                                if (into_lvalue!=null)
+                                {
+                                    instructions.Add(FlatStatement.REFERENCE(into_lvalue, fop_input));
+                                }
+                                return fop_input;
                             }
                             nParameter++;
                         }
@@ -615,7 +632,7 @@ namespace LS2IL
                             FlatOperand fop_field = Resolve((FieldSymbol)si.Symbol, fop_type, null, instructions);
 
 
-                            FlatOperand into_lvalue;
+                            if (into_lvalue == null)
                             {
                                 FlatOperand register_fop = AllocateRegister("");
                                 into_lvalue = register_fop.GetLValue(this, instructions);
@@ -641,7 +658,13 @@ namespace LS2IL
                             }
 
                             FlatValue retval = FlatValue.FromType(field.Type);
-                            return FlatOperand.FieldRef(nField, retval);
+                            FlatOperand retop = FlatOperand.FieldRef(nField, retval);
+
+                            if (into_lvalue != null)
+                            {
+                                instructions.Add(FlatStatement.REFERENCE(into_lvalue, retop));
+                            }
+                            return retop;
                         }
                     }
                     break;
@@ -653,7 +676,7 @@ namespace LS2IL
                             FlatOperand fop_property = Resolve((PropertySymbol)si.Symbol, fop_type, null, instructions);
 
 
-                            FlatOperand into_lvalue;
+                            if (into_lvalue == null)
                             {
                                 FlatOperand register_fop = AllocateRegister("");
                                 into_lvalue = register_fop.GetLValue(this, instructions);
@@ -669,8 +692,7 @@ namespace LS2IL
                             FlatOperand fop_type = TypeOf(FlatOperand.ThisRef(thisValue), si.Symbol.ContainingType, null, instructions);
                             FlatOperand fop_property = Resolve((PropertySymbol)si.Symbol, fop_type, null, instructions);
 
-
-                            FlatOperand into_lvalue;
+                            if (into_lvalue == null)
                             {
                                 FlatOperand register_fop = AllocateRegister("");
                                 into_lvalue = register_fop.GetLValue(this, instructions);
@@ -1112,7 +1134,7 @@ namespace LS2IL
             //SymbolInfo si = Model.GetSymbolInfo(node.Expression);
             TypeInfo ti = Model.GetTypeInfo(node.Expression);
 
-            FlatOperand fop_array = ResolveExpression(node.Expression, into_lvalue, instructions);
+            FlatOperand fop_array = ResolveExpression(node.Expression, null, instructions);
 
             switch (ti.ConvertedType.TypeKind)
             {
@@ -1132,8 +1154,37 @@ namespace LS2IL
                         return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                     }
                     break;
+                case TypeKind.Class:
+                    {
+                        // resolve method and perform method call..
+                        // resolve the array index
+
+                        if (ti.ConvertedType.GetFullyQualifiedName() == "LavishScript2.Table")
+                        {
+                            /*
+                            List<FlatOperand> args = ResolveArguments(node.ArgumentList, instructions);
+                            FlatOperand key = ArrayIndexFrom(args, instructions);
+                            /**/
+                            ArgumentSyntax arg = node.ArgumentList.Arguments.Single();
+                            FlatOperand key = ResolveArgument(arg,null,instructions);
+
+                            if (into_lvalue == null)
+                            {
+                                FlatOperand register_fop = AllocateRegister("");
+                                into_lvalue = register_fop.GetLValue(this, instructions);
+                            }
+
+
+
+                            instructions.Add(FlatStatement.TABLEGET(into_lvalue, fop_array, key));
+                            return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                        }
+
+                        throw new NotImplementedException("element access on type " + ti.ConvertedType.GetFullyQualifiedName());
+                    }
+                    break;
                 default:
-                    throw new NotImplementedException("element access on type " + fop_array.ImmediateValue.ValueType.ToString());
+                    throw new NotImplementedException("element access on type " + ti.ConvertedType.GetFullyQualifiedName());//fop_array.ImmediateValue.ValueType.ToString());
             }
 
             // resolve the index
@@ -1518,7 +1569,7 @@ namespace LS2IL
 
                 TypeInfo ti = Model.GetTypeInfo(expr);
 
-                return this.Resolve(ins, ti, instructions);
+                return this.Resolve(ins, ti, null, instructions);
             }
             throw new NotImplementedException();
         }
@@ -2021,7 +2072,26 @@ namespace LS2IL
             {
                 throw new NotImplementedException("type conversion");
             }
-            
+            if (node is PredefinedTypeSyntax)
+            {
+                /*
+         // Summary:
+        //     SyntaxToken which represents the keyword corresponding to the predefined
+        //     type.
+        public SyntaxToken Keyword { get; }*/
+                PredefinedTypeSyntax pts = (PredefinedTypeSyntax)node;
+                SymbolInfo si = Model.GetSymbolInfo(node);
+
+                switch (si.Symbol.Kind)
+                {
+                    case SymbolKind.NamedType:
+                        {
+                            FlatOperand fop_type = Resolve((TypeSymbol)si.Symbol, into_lvalue, instructions);
+
+                            return fop_type;
+                        }
+                }
+            }
             if (node is ParenthesizedExpressionSyntax)
             {
                 ParenthesizedExpressionSyntax pes = (ParenthesizedExpressionSyntax)node;
@@ -2075,7 +2145,7 @@ namespace LS2IL
             if (node is IdentifierNameSyntax)
             {
                 IdentifierNameSyntax ins = (IdentifierNameSyntax)node;
-                return Resolve(ins, result_type, instructions);
+                return Resolve(ins, result_type, into_lvalue, instructions);
             }
             if (node is InvocationExpressionSyntax)
             {
@@ -2473,8 +2543,15 @@ namespace LS2IL
             this.PushVariableScope(instructions);
 
             // variable declarations
-            Flatten(node.Declaration, instructions);
-
+            if (node.Declaration!=null)
+                Flatten(node.Declaration, instructions);
+            if (node.Initializers != null)
+            {
+                foreach (ExpressionSyntax expr in node.Initializers)
+                {
+                    FlatOperand dropping_value = ResolveExpression(expr,null, instructions);
+                }
+            }
             string forPrefix = this.MakeUniqueLabelPrefix("for");
 
             string conditionCheckLabel = forPrefix + "conditionCheck"; // WHERE THE CONTINUE GOES!

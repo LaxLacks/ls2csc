@@ -21,14 +21,53 @@ namespace System
             bool MoveNext();
             void Reset();
         }
+
+        namespace Generic
+        {
+
+            [Serializable]
+            public struct KeyValuePair<TKey, TValue>
+            {
+                public KeyValuePair(TKey key, TValue value);
+
+                public TKey Key { get; }
+                public TValue Value { get; }
+                public override string ToString();
+            }
+
+            public class Dictionary<TKey, TValue> : IEnumerable
+            {
+                public int Count { get; }
+                public TValue this[TKey key] { get; set; }
+                public void Add(TKey key, TValue value);
+                public void Clear();
+                public bool ContainsKey(TKey key);
+                public bool ContainsValue(TValue value);
+                public bool Remove(TKey key);
+                public bool TryGetValue(TKey key, out TValue value);
+
+                public Dictionary<TKey, TValue>.Enumerator GetEnumerator();
+
+                public struct Enumerator : IEnumerator<KeyValuePair<TKey, TValue>>, IDisposable, IDictionaryEnumerator, IEnumerator
+                {
+
+                    public KeyValuePair<TKey, TValue> Current { get; }
+
+                    public void Dispose();
+                    public bool MoveNext();
+                }
+
+            }
+
+        }
     }
 
-    class Attribute
+    public class Attribute
     {
     }
         
     // defines an intrinsic method or property, which is defined somewhere in ls2csc, as opposed to being defined at runtime
-    class LS2Intrinsic : Attribute
+    public class LS2Intrinsic : Attribute
     {
         // the name will be used to determine which intrinsic is to be used
         public LS2Intrinsic(string name)
@@ -78,6 +117,10 @@ namespace System
     {
     }
 
+    public struct Char
+    {
+    }
+
     public struct Byte
     {
     }
@@ -114,7 +157,10 @@ namespace System
     {
         // this will translate into the STRINGVAL instruction, rather than a method access
         [LS2Intrinsic("Object.ToString")]
-        public virtual string ToString();    
+        public virtual string ToString();
+
+        [LS2Intrinsic("Object.GetMetaTable")]
+        public virtual LavishScript2.Table GetMetaTable();
     }
 
     public struct Void
@@ -133,6 +179,9 @@ namespace System
 
     public class String
     {
+        public static readonly string Empty = "";
+        public static bool IsNullOrEmpty(string value);
+
         // Summary:
         //     Gets the number of characters in the current System.String object.
         //
@@ -142,7 +191,10 @@ namespace System
         // this will translate into the LEN instruction, rather than a property access
         [LS2Intrinsic("Length")]
         public int Length { get; }
+
+        public string[] Split(params char[] separator);
     }
+
     public class Console
     {
         public static void WriteLine(string s);

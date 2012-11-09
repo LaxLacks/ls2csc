@@ -12,7 +12,7 @@ namespace LS2IL
 {
     class Chunk
     {
-        public const string LS2ILVersion = "0.8.20121026.1";
+        public const string LS2ILVersion = "0.9.20121108.1";
 
         public Chunk(Compilation compilation)
         {
@@ -56,20 +56,30 @@ namespace LS2IL
             return tei;
         }
 
+        
         /// <summary>
         /// Retrieves a TypeExtraInfo given a NamedTypeSymbol, instantiating a new one if necessary
         /// </summary>
         /// <param name="sym"></param>
+        /// <param name="model"></param>
+        /// <param name="isLibrary">true if the type is external and should not be generated into the Chunk</param>
         /// <returns></returns>
-        public TypeExtraInfo AddTypeExtraInfo(NamedTypeSymbol sym, SemanticModel model)
+        public TypeExtraInfo AddTypeExtraInfo(NamedTypeSymbol sym, SemanticModel model, bool isLibrary)
         {
             TypeExtraInfo tei;
             if (TypeExtraInfo.TryGetValue(sym, out tei))
                 return tei;
 
-            tei = new TypeExtraInfo(this, model, sym);
+            tei = new TypeExtraInfo(this, model, sym, isLibrary);
             TypeExtraInfo.Add(sym, tei);
             return tei;
+        }
+
+
+        public void AddFunction(IndexerDeclarationSyntax node, SemanticModel Model)
+        {
+            PropertySymbol ms = Model.GetDeclaredSymbol(node);
+            throw new NotImplementedException("indexer");
         }
 
         public void AddFunction(MethodDeclarationSyntax node, SemanticModel Model)
@@ -111,7 +121,7 @@ namespace LS2IL
 
             if (ms.IsImplicitlyDeclared)
             {
-                TypeExtraInfo tei = AddTypeExtraInfo(ms.ContainingType, Model);
+                TypeExtraInfo tei = AddTypeExtraInfo(ms.ContainingType, Model,false); // assuming isLibrary=false because we have a function representing it in the chunk.
                 tei.MetadataGenerator.Add(ms);
             }
         }
@@ -125,8 +135,10 @@ namespace LS2IL
             foreach (KeyValuePair<NamedTypeSymbol, TypeExtraInfo> kvp in TypeExtraInfo)
             {
                 LS2IL.TypeExtraInfo.ClassMetadataGenerator cmg = kvp.Value.MetadataGenerator;
-
-                fab.Add(cmg.GetFlatValue());
+                if (!cmg.IsLibrary)
+                {
+                    fab.Add(cmg.GetFlatValue());
+                }
             }
 
             MetaValues.Add("Declared Types", fab.GetFlatValue());

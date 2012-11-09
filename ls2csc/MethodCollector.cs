@@ -47,5 +47,11 @@ namespace ls2csc
             Chunk.AddFunction(node, Model);
         }
 
+        public override void VisitIndexerDeclaration(IndexerDeclarationSyntax node)
+        {
+            base.VisitIndexerDeclaration(node);
+            Chunk.AddFunction(node, Model);
+        }
+
     }    
 }

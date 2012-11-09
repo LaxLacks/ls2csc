@@ -198,12 +198,19 @@ namespace LS2IL
         {
             if (token.Kind == SyntaxKind.StringLiteralToken)
                 return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = "\""+token.ValueText+"\"" };
+            if (token.Kind == SyntaxKind.CharacterLiteralToken)
+                return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = "'" + token.ValueText + "'" };
             return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = token.ValueText };
         }
 
         public static FlatValue FromType(TypeSymbol type)
         {
             return new FlatValue() { ValueType = GetFlatValueType(type) };
+        }
+
+        public static FlatValue Table()
+        {
+            return new FlatValue() { ValueType = FlatValueType.VT_Table };
         }
 
         public static FlatValueType GetFlatValueType(TypeSymbol type)
@@ -238,6 +245,8 @@ namespace LS2IL
                     return FlatValueType.VT_Boolean;
                 case SpecialType.System_Object:
                     return FlatValueType.VT_Object;
+                case SpecialType.System_Char:
+                    return FlatValueType.VT_Char;
                 case SpecialType.None:
                     return FlatValueType.VT_Object;
             }
