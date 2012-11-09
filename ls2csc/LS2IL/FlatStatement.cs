@@ -413,6 +413,20 @@ namespace LS2IL
             return new FlatStatement(Instruction.LEN, lvalue, right);
         }
 
+        public static FlatStatement TABLEGET(FlatOperand lvalue, FlatOperand table, FlatOperand key)
+        {
+            if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
+            {
+                throw new NotSupportedException("expected register number (LValue) in left");
+            }
+
+            return new FlatStatement(Instruction.TABLEGET, lvalue, table, key);
+        }
+        public static FlatStatement TABLESET(FlatOperand table, FlatOperand key, FlatOperand rvalue)
+        {
+            return new FlatStatement(Instruction.TABLESET, table, key, rvalue);
+        }
+
         public static FlatStatement ARRAYGET(FlatOperand lvalue, FlatOperand array, FlatOperand index)
         {
             if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
@@ -638,6 +652,15 @@ namespace LS2IL
             return new FlatStatement(Instruction.STRINGVAL, lvalue, right);
         }
 
+        public static FlatStatement GETMETATABLE(FlatOperand lvalue, FlatOperand right)
+        {
+            if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
+            {
+                throw new NotSupportedException("expected register number (LValue) in left");
+            }
+            return new FlatStatement(Instruction.GETMETATABLE, lvalue, right);
+        }
+
         public static FlatStatement TYPEOF(FlatOperand lvalue, FlatOperand right)
         {
             if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
@@ -738,6 +761,8 @@ namespace LS2IL
 
         IS,
         AS,
+
+        GETMETATABLE,
 
         // unused stuff
         //		ASSIGN,	 // assigns a new value to the LS2CodeBoxValue...
