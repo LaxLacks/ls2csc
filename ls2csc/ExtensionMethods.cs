@@ -149,6 +149,30 @@ namespace LS2IL
             return false;
         }
 
+        public static bool IsBasicBlockExit(this Instruction instr)
+        {
+            switch (instr)
+            {
+                case Instruction.JE:
+                case Instruction.JG:
+                case Instruction.JGE:
+                case Instruction.JL:
+                case Instruction.JLE:
+                case Instruction.JMP:
+                case Instruction.JNE:
+                case Instruction.JNZ:
+                case Instruction.JZ:
+                case Instruction.THROW:
+                case Instruction.SWITCH:
+                case Instruction.RETURN:
+                case Instruction.LEAVE:
+                case Instruction.ENDFINALLY:
+                    return true;
+            }
+
+            return false;
+        }
+
         public static bool HasLValue(this Instruction instr)
         {
             switch (instr)
