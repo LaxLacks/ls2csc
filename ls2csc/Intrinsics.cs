@@ -61,6 +61,7 @@ namespace ls2csc
 
             Properties = new Dictionary<string, IntrinsicProperty>();
             Properties.Add("Array.Length", new IntrinsicProperty_Length());
+            Properties.Add("Length", new IntrinsicProperty_Length());
         }
 
         static Dictionary<string, IntrinsicMethod> Methods { get; set; }
