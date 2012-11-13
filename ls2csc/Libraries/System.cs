@@ -62,6 +62,20 @@ namespace System
         }
     }
 
+    namespace Diagnostics
+    {
+        public sealed class Debugger
+        {
+            public static readonly string DefaultCategory;
+            public static bool IsAttached { get; }
+            public static void Break();
+            public static bool IsLogging();
+            public static bool Launch();
+            public static void Log(int level, string category, string message);
+            public static void NotifyOfCrossThreadDependency();
+        }
+    }
+
     public class Attribute
     {
     }
