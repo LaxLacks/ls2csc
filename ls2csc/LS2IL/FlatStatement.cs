@@ -701,6 +701,11 @@ namespace LS2IL
         }
         /**/
 
+        public override string ToString()
+        {
+            return Emit();
+        }
+
         public string Emit()
         {
             string val = string.Empty;
