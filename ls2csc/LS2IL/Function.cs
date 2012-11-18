@@ -169,74 +169,37 @@ namespace LS2IL
             fil.InjectLeaveStatements(instructions);
         }
 
-        public void FlattenLabels(List<FlatStatement> instructions, bool filterUnusedInstructions)
+
+        public void FlattenLabels(List<FlatStatement> instructions)
         {
             {
                 int nInstructions = 0;
-                bool bSpaceBetween = false;
 
                 foreach (FlatStatement fs in instructions)
                 {
                     if (fs.Instruction == Instruction.meta_LABEL)
                     {
-                        bSpaceBetween = false;
                         string s = fs.Operands[0].ImmediateValue.ValueText;
                         EmittedLabels.Add(s, nInstructions);
                         //fs.Emit();
                     }
                     else
                     {
-                        if (bSpaceBetween)
-                        {
-                            if (filterUnusedInstructions)
-                                continue;
-                        }
-
                         nInstructions++;
-
-                        switch (fs.Instruction)
-                        {
-                            case Instruction.JMP:
-                            case Instruction.RETURN:
-                            case Instruction.THROW:
-                                {
-                                    bSpaceBetween = true;
-                                }
-                                break;
-                        }
                     }
                 }
             }
 
             {
                 int nInstructions = 0;
-                bool bSpaceBetween = false;
                 foreach (FlatStatement fs in instructions)
                 {
                     if (fs.Instruction == Instruction.meta_LABEL)
                     {
-                        bSpaceBetween = false;
                         continue;
                     }
 
-                    if (bSpaceBetween)
-                    {
-                        if (filterUnusedInstructions)
-                            continue;
-                    }
-
                     nInstructions++;
-
-                    switch (fs.Instruction)
-                    {
-                        case Instruction.JMP:
-                        case Instruction.RETURN:
-                        case Instruction.THROW:
-                            {
-                                bSpaceBetween = true;
-                            }
-                            break;
-                    }
 
                     if (fs.Operands == null)
                         continue;
@@ -284,19 +247,16 @@ namespace LS2IL
             }
         }
 
-        /// <summary>
-        /// Flattens the C# tree into LS2IL statements
-        /// </summary>
-        /// <param name="flattenLabels">true if the flattened IL should have labels removed, e.g.. for execution (noting that the LS2IL reader does not currently support labels). the output is generally more human-readable by passing false.</param>
-        /// <param name="bFilterUnusedInstructions">ls2csc can detect unused instructions in some cases. pass true to remove the known cases (noting that the compiler purposefully generates unused instructions in many cases).</param>
-        /// <param name="condenseRegisters">true to try to reduce the number of registers used by the generated code. false if it should stay purposefully bloated.</param>
         public void FlattenToInstructions(bool flattenLabels, bool bFilterUnusedInstructions, bool condenseRegisters)
         {
             List<FlatStatement> list = Flatten();
 
+            ControlFlowGraph cfg = new ControlFlowGraph(this, list);
+            cfg.Build();
+
             if (condenseRegisters)
             {
-                PackedRegisters = RegisterPacker.Pack(list);
+                PackedRegisters = RegisterPackers.Pack(cfg);
             }
             else
             {
@@ -305,42 +265,15 @@ namespace LS2IL
 
             if (PackedRegisters > 256)
             {
-                throw new NotImplementedException("Too many registers used in function "+this.MethodSymbol.GetFullyQualifiedName());
+                throw new NotImplementedException("Too many registers used in function " + this.MethodSymbol.GetFullyQualifiedName());
             }
 
-            InjectLeaveStatements(list);
+            list = cfg.Flatten();
 
-            bool spaceBetween = false;
             if (flattenLabels)
             {
-                FlattenLabels(list, true);
+                FlattenLabels(list);
 
-
-
-
-                foreach (FlatStatement fs in list)
-                {
-                    if (fs.Instruction == Instruction.meta_LABEL)
-                    {
-                        spaceBetween = false;
-                    }
-                    else
-                    {
-                        if (spaceBetween)
-                        {
-                            if (!bFilterUnusedInstructions)
-                            {
-                                EmitInstruction(fs.Emit() + " ; UNUSED");
-                            }
-                        }
-                        else
-                            EmitInstruction(fs.Emit());
-                    }
-                    if (fs.Instruction == Instruction.RETURN || fs.Instruction == Instruction.JMP || fs.Instruction == Instruction.THROW)
-                    {
-                        spaceBetween = true;
-                    }
-                }
 
                 foreach (FlatValue fv in FunctionValues)
                 {
@@ -369,30 +302,22 @@ namespace LS2IL
                     }
                 }
             }
+
+            if (flattenLabels)
+            {
+                foreach (FlatStatement fs in list)
+                {
+                    if (fs.Instruction != Instruction.meta_LABEL)
+                        EmitInstruction(fs.Emit());
+                }
+            }
             else
             {
                 foreach (FlatStatement fs in list)
                 {
-                    if (fs.Instruction == Instruction.meta_LABEL)
-                    {
-                        spaceBetween = false;
-                    }
-                    //else// this else is only for flattening labels
-                    {
-                        if (spaceBetween)
-                        {
-                            EmitInstruction(fs.Emit() + " ; UNUSED");
-                        }
-                        else
-                            EmitInstruction(fs.Emit());
-                    }
-                    if (fs.Instruction == Instruction.RETURN || fs.Instruction == Instruction.JMP || fs.Instruction == Instruction.THROW)
-                    {
-                        spaceBetween = true;
-                    }
+                    EmitInstruction(fs.Emit());
                 }
             }
-
         }
 
         void EmitInstruction(string s)

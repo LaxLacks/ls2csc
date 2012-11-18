@@ -57,7 +57,8 @@
     <EmbeddedResource Include="Libraries\LavishScript2.cs" />
     <EmbeddedResource Include="Libraries\InnerSpaceAPI.cs" />
     <Compile Include="LS2IL\ControlFlowGraph.cs" />
-    <Compile Include="LS2IL\RegisterPacker.cs" />
+    <Compile Include="LS2IL\DefaultRegisterPacker.cs" />
+    <Compile Include="LS2IL\RegisterPackers.cs" />
     <Compile Include="Options\Options.cs" />
     <Compile Include="TypeExtraInfo.cs" />
     <Compile Include="UnaryToBinaryRewriter.cs" />

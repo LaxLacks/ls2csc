@@ -141,8 +141,8 @@ namespace LS2IL
                 }
                 else if (fv.Object is FlatTableBuilder)
                 {
-                    FlatTableBuilder fab = (FlatTableBuilder)fv.Object;
-                    fab.FlattenLabels(function);
+                    FlatTableBuilder ftb = (FlatTableBuilder)fv.Object;
+                    ftb.FlattenLabels(function);
                 }
             }
         }
