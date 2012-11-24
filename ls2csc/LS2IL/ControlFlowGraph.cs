@@ -396,6 +396,8 @@ namespace LS2IL
                         bb.Dispose();
                         BasicBlocks.RemoveAt(i);
 
+                        if (BasicBlocks.Count <= i)
+                            break;
                         bb = BasicBlocks[i];
                     }
                 }
