@@ -197,7 +197,7 @@ namespace LS2IL
         public static FlatValue FromLiteralToken(TypeSymbol type, SyntaxToken token)
         {
             if (token.Kind == SyntaxKind.StringLiteralToken)
-                return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = "\""+token.ValueText+"\"" };
+                return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = "\""+token.ValueText.Replace("\"","\\\"")+"\"" };
             if (token.Kind == SyntaxKind.CharacterLiteralToken)
                 return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = "'" + token.ValueText + "'" };
             return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = token.ValueText };
