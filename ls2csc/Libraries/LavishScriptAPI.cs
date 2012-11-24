@@ -16,6 +16,8 @@ namespace LavishScriptAPI
         public bool ExecuteMethod(string Method);
         public bool ExecuteMethod(string Method, params string[] indices);
         public LavishScriptObject GetLSType();
+
+        public string LSReference { get; }
         public string LSType { get; }
 
         //public override string ToString(); // this is implied...
@@ -24,6 +26,7 @@ namespace LavishScriptAPI
     public class LavishScript
     {
         static public void ExecuteCommand(string Command);
+        public static void ExecuteCommand(System.String[] cmd);
         static public string DataParse(string DataSequence);
 
         static public class Objects

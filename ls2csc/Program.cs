@@ -269,6 +269,7 @@ namespace ls2csctest
                                               "ls2csc.Libraries.InnerSpaceAPI.cs", 
                                               "ls2csc.Libraries.LavishScriptAPI.cs", 
                                               "ls2csc.Libraries.LavishScript2.cs", 
+                                              "ls2csc.Libraries.LavishSettings.cs", 
                                               "ls2csc.Libraries.System.cs" 
                                           };
 
