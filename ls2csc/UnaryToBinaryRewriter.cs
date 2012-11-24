@@ -16,7 +16,7 @@ namespace ls2csc
         {
             switch (node.Kind)
             {
-                case SyntaxKind.PreIncrementExpression:
+                case SyntaxKind.PreIncrementExpression: 
                     return Syntax.BinaryExpression(SyntaxKind.AddAssignExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(1)));
                 case SyntaxKind.PreDecrementExpression:
                     return Syntax.BinaryExpression(SyntaxKind.SubtractAssignExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(1)));
@@ -27,6 +27,8 @@ namespace ls2csc
                         return Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(newvalue));
                     }
                     return node;
+                case SyntaxKind.LogicalNotExpression:
+                    return Syntax.BinaryExpression(SyntaxKind.NotEqualsExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.TrueLiteralExpression));
             }
             throw new NotImplementedException("Unary prefix " + node.Kind.ToString());
         }
