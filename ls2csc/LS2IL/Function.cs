@@ -475,6 +475,29 @@ namespace LS2IL
             return into_lvalue.AsRValue(FlatValue.Type(type));
         }
 
+        public FlatOperand Resolve(QualifiedNameSyntax qns, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            SymbolInfo si = Model.GetSymbolInfo(qns);
+
+            //string name = qns.Identifier.ToString();
+            switch (si.Symbol.Kind)
+            {
+                case SymbolKind.NamedType:
+                    {
+                        FlatOperand fop_type = Resolve((TypeSymbol)si.Symbol, into_lvalue, instructions);
+
+                        if (into_lvalue != null)
+                        {
+                            instructions.Add(FlatStatement.REFERENCE(into_lvalue, fop_type));
+                        }
+
+                        return fop_type;
+                    }
+                    break;
+            }
+            throw new NotImplementedException(si.Symbol.Kind.ToString());
+        }
+
         public FlatOperand Resolve(IdentifierNameSyntax ins, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             SymbolInfo si = Model.GetSymbolInfo(ins);
@@ -2072,6 +2095,11 @@ namespace LS2IL
                 IdentifierNameSyntax ins = (IdentifierNameSyntax)node;
                 return Resolve(ins, result_type, into_lvalue, instructions);
             }
+            if (node is QualifiedNameSyntax)
+            {
+                QualifiedNameSyntax qns = (QualifiedNameSyntax)node;
+                return Resolve(qns, result_type, into_lvalue, instructions);
+            }
             if (node is InvocationExpressionSyntax)
             {
                 InvocationExpressionSyntax ies = (InvocationExpressionSyntax)node;
@@ -2540,6 +2568,8 @@ namespace LS2IL
             instructions.Add(FlatStatement.LABEL(FlatOperand.LabelRef(beginWhileLabel)));
             this.FlattenStatement(node.Statement, instructions);
 
+            // jump to condition check
+            instructions.Add(FlatStatement.JMP(FlatOperand.LabelRef(conditionCheckLabel)));
             // end
             instructions.Add(FlatStatement.LABEL(FlatOperand.LabelRef(endWhileLabel)));
 
