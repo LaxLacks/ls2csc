@@ -86,6 +86,7 @@
         public Type PropertyType { get; }
         public bool IsGetSupported { get; }
         public bool IsSetSupported { get; }
+        public string CSharpDeclaration { get; }
 
         public object Get(object subject);
         public void Set(object subject, object value);
@@ -97,11 +98,30 @@
         public Type PropertyType { get; }
         public bool IsGetSupported { get; }
         public bool IsSetSupported { get; }
+        public string CSharpDeclaration { get; }
 
         public object Get();
         public void Set(object value);
     }
 
+    public class Field
+    {
+        public System.Object Get(System.Object subject);
+        public void Set(System.Object subject, System.Object value);
+        public System.String CSharpDeclaration { get; }
+        public LavishScript2.Type FieldType { get; }
+        public System.Object InitialValue { get; }
+        public LavishScript2.Type ParentType { get; }
+    }
+
+    public class StaticField
+    {
+        public System.String CSharpDeclaration { get; }
+        public System.String Name { get; }
+        public LavishScript2.Type ParentType { get; }
+        public LavishScript2.Type StaticFieldType { get; }
+        public System.Object Value { get; set; }
+    }
     /// <summary>
     /// A Type is a type of object as defined within the environment
     /// </summary>
@@ -114,7 +134,9 @@
         public LavishScript2.Table AllStaticMethods { get; }
         public LavishScript2.Table AllProperties { get; }
         public LavishScript2.Table AllStaticProperties { get; }
-
+        public LavishScript2.Field[] AllFields { get; }
+        public LavishScript2.Table AllStaticFields { get; }
+        public Type[] AllInterfaces { get; }
 
         public static Type[] AllTypes { get; }
     }
