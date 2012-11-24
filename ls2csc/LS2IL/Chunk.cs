@@ -12,7 +12,7 @@ namespace LS2IL
 {
     class Chunk
     {
-        public const string LS2ILVersion = "0.9.20121108.1";
+        public const string LS2ILVersion = "0.9.20121123.1";
 
         public Chunk(Compilation compilation)
         {
