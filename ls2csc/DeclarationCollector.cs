@@ -4,7 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using LS2IL;
-using Roslyn.Compilers.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace ls2csc
 {
@@ -13,7 +15,7 @@ namespace ls2csc
     /// This SyntaxWalker implements the first phase of scanning. We collect Class declarations and tell the Chunk about their members. 
     /// The results will go into the metadata emitted into the LS2IL, which in turn gets used by the VM/runtime to initialize types.
     /// </summary>
-    class DeclarationCollector : SyntaxWalker
+    class DeclarationCollector : CSharpSyntaxWalker
     {
         public DeclarationCollector(Chunk chunk, SemanticModel model, bool isLibrary)
         {
@@ -36,7 +38,7 @@ namespace ls2csc
         {            
             LS2IL.TypeExtraInfo.ClassMetadataGenerator wasClass = CurrentClass;
 
-            NamedTypeSymbol s = Model.GetDeclaredSymbol(node);
+            INamedTypeSymbol s = Model.GetDeclaredSymbol(node);
             
             TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model,IsLibrary);
             CurrentClass = tei.MetadataGenerator;
@@ -88,7 +90,7 @@ namespace ls2csc
         {
             LS2IL.TypeExtraInfo.ClassMetadataGenerator wasClass = CurrentClass;
 
-            NamedTypeSymbol s = Model.GetDeclaredSymbol(node);
+            INamedTypeSymbol s = Model.GetDeclaredSymbol(node);
 
             TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model, IsLibrary);
             CurrentClass = tei.MetadataGenerator;
@@ -116,7 +118,7 @@ namespace ls2csc
         {
             LS2IL.TypeExtraInfo.ClassMetadataGenerator wasClass = CurrentClass;
 
-            NamedTypeSymbol s = Model.GetDeclaredSymbol(node);
+            INamedTypeSymbol s = Model.GetDeclaredSymbol(node);
 
             TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model, IsLibrary);
             CurrentClass = tei.MetadataGenerator;

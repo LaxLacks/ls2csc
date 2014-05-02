@@ -3,14 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
-using Roslyn.Services;
-using Roslyn.Services.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace ls2csc
 {
-    class ForeachRewriter : SyntaxRewriter
+    class ForeachRewriter : CSharpSyntaxRewriter
     {
         public override SyntaxNode VisitForEachStatement(ForEachStatementSyntax node)
         {
@@ -35,102 +34,106 @@ namespace ls2csc
 
             return base.Visit
             (
-                Syntax.Block
+                SyntaxFactory.Block
                 (
-                    Syntax.LocalDeclarationStatement
+                    SyntaxFactory.LocalDeclarationStatement
                     (
-                        Syntax.VariableDeclaration
+                        SyntaxFactory.VariableDeclaration
                         (
-                            Syntax.IdentifierName
+                            SyntaxFactory.IdentifierName
                             (
                                 "var"
                             ),
-                            Syntax.SeparatedList<VariableDeclaratorSyntax>
+                            SyntaxFactory.SeparatedList<VariableDeclaratorSyntax>
                             (
-                                Syntax.VariableDeclarator
+                                new VariableDeclaratorSyntax[] {
+                                SyntaxFactory.VariableDeclarator
                                 (
-                                    Syntax.Identifier(itername),
+                                    SyntaxFactory.Identifier(itername),
                                     null,
-                                    Syntax.EqualsValueClause
+                                    SyntaxFactory.EqualsValueClause
                                     (
-                                        Syntax.Token(SyntaxKind.EqualsToken),
-                                        Syntax.InvocationExpression
+                                        SyntaxFactory.Token(SyntaxKind.EqualsToken),
+                                        SyntaxFactory.InvocationExpression
                                         (
-                                            Syntax.MemberAccessExpression
+                                            SyntaxFactory.MemberAccessExpression
                                             (
-                                                SyntaxKind.MemberAccessExpression,
+                                                SyntaxKind.SimpleMemberAccessExpression,
                                                 node.Expression,
-                                                Syntax.IdentifierName("GetEnumerator")
+                                                SyntaxFactory.IdentifierName("GetEnumerator")
                                             )
                                         )
                                     )
                                 )
+                            }
                             )
                         )
                     ),
-                    Syntax.UsingStatement
+                    SyntaxFactory.UsingStatement
                     (
                         null,
-                        Syntax.CastExpression
+                        SyntaxFactory.CastExpression
                         (
-                            Syntax.ParseTypeName("System.IDisposable"),
-                            Syntax.IdentifierName(itername)
+                            SyntaxFactory.ParseTypeName("System.IDisposable"),
+                            SyntaxFactory.IdentifierName(itername)
                         ),
-                        Syntax.Block
+                        SyntaxFactory.Block
                         (
-                            Syntax.IfStatement
+                            SyntaxFactory.IfStatement
                             (
-                                Syntax.InvocationExpression
+                                SyntaxFactory.InvocationExpression
                                 (
-                                    Syntax.MemberAccessExpression
+                                    SyntaxFactory.MemberAccessExpression
                                     (
-                                        SyntaxKind.MemberAccessExpression,
-                                        Syntax.IdentifierName(itername),
-                                        Syntax.IdentifierName("MoveNext")
+                                        SyntaxKind.SimpleMemberAccessExpression,
+                                        SyntaxFactory.IdentifierName(itername),
+                                        SyntaxFactory.IdentifierName("MoveNext")
                                     )
                                 ),
-                                Syntax.Block
+                                SyntaxFactory.Block
                                 (
-                                    Syntax.DoStatement
+                                    SyntaxFactory.DoStatement
                                     (
-                                        Syntax.Block
+                                        SyntaxFactory.Block
                                         (
-                                            Syntax.LocalDeclarationStatement
+                                            SyntaxFactory.LocalDeclarationStatement
                                             (
-                                                Syntax.VariableDeclaration
+                                                SyntaxFactory.VariableDeclaration
                                                 (
                                                     node.Type, 
-                                                    Syntax.SeparatedList<VariableDeclaratorSyntax>
+                                                    SyntaxFactory.SeparatedList<VariableDeclaratorSyntax>
                                                     (
-                                                        Syntax.VariableDeclarator
+                                                        new VariableDeclaratorSyntax[] { 
+                                                        SyntaxFactory.VariableDeclarator
                                                         (
                                                             node.Identifier,
                                                             null,
-                                                            Syntax.EqualsValueClause
+                                                            SyntaxFactory.EqualsValueClause
                                                             (
-                                                                Syntax.CastExpression
+                                                                SyntaxFactory.CastExpression
                                                                 (
                                                                     node.Type,
-                                                                    Syntax.MemberAccessExpression
+                                                                    SyntaxFactory.MemberAccessExpression
                                                                     (
-                                                                        SyntaxKind.MemberAccessExpression,
-                                                                        Syntax.IdentifierName(itername),
-                                                                        Syntax.IdentifierName("Current")
+                                                                        SyntaxKind.SimpleMemberAccessExpression,
+                                                                        SyntaxFactory.IdentifierName(itername),
+                                                                        SyntaxFactory.IdentifierName("Current")
                                                                     )
                                                                 )
                                                             )
                                                         )
+                                                        }
                                                     )
                                                 )
                                             ),
                                             node.Statement
                                         ),
-                                        Syntax.InvocationExpression(
-                                            Syntax.MemberAccessExpression
+                                        SyntaxFactory.InvocationExpression(
+                                            SyntaxFactory.MemberAccessExpression
                                             (
-                                                SyntaxKind.MemberAccessExpression,
-                                                Syntax.IdentifierName(itername),
-                                                Syntax.IdentifierName("MoveNext")
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.IdentifierName(itername),
+                                                SyntaxFactory.IdentifierName("MoveNext")
                                             )
                                         )
                                     )

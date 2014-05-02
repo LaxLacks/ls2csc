@@ -18,10 +18,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
-using Roslyn.Services;
-using Roslyn.Services.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using NDesk.Options;
 
 namespace ls2csc
@@ -140,13 +138,15 @@ namespace ls2csc
                     {
                         System.Console.Error.WriteLine("Attempting to compile from file '" + inputfile + "'");
                     }
-                    inputTrees.Add(SyntaxTree.ParseFile(inputfile));
+                    
+                    inputTrees.Add(CSharpSyntaxTree.ParseFile(inputfile));
                 }
             }
             else
             {
 #if !USEPREDEF
                 System.Console.Error.WriteLine("ls2csc: Filename required");
+                System.Console.Error.WriteLine("ls2csc: To display help, use 'ls2csc -h'");
                 return;
 #endif
 
@@ -275,20 +275,20 @@ namespace ls2csctest
 
                 foreach(string s in auto_reference)
                 {
-                    SyntaxTree tree = SyntaxTree.ParseText(Resources.Instance.DeserializeStream(s));
+                    SyntaxTree tree = CSharpSyntaxTree.ParseText(Resources.Instance.DeserializeStream(s));
                     syntaxTrees.Add(tree);
                     referenceTrees.Add(tree);
                 }
 
                 foreach (string s in referenceFiles)
                 {
-                    SyntaxTree tree = SyntaxTree.ParseFile(s);
+                    SyntaxTree tree = CSharpSyntaxTree.ParseFile(s);
                     syntaxTrees.Add(tree);
                     referenceTrees.Add(tree);
                 }
                 #endregion
 
-                Compilation compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
+                Compilation compilation = CSharpCompilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
 
 
                 compilation = compilation.AddSyntaxTrees(inputTrees);
@@ -303,12 +303,12 @@ namespace ls2csctest
                     {
                         foreach (Diagnostic diag in diags)
                         {
-                            if (diag.Info.Severity == DiagnosticSeverity.Error)
+                            if (diag.Severity == DiagnosticSeverity.Error)
                             {
                                 nErrors++;
                             }
                             int neededSilence = 1;
-                            switch (diag.Info.Severity)
+                            switch (diag.Severity)
                             {
                                 case DiagnosticSeverity.Error:
                                     neededSilence = 3;
@@ -343,17 +343,19 @@ namespace ls2csctest
                     SyntaxNode newRoot = tree.GetRoot();
 
                     newRoot = new EnumValueRewriter().Visit(newRoot);
+#if SCRIPTING_API_REINTRODUCED
                     newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
+#endif
                     newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
                     newRoot = new FieldInitializerRewriter().Visit(newRoot);
                     newRoot = new ForeachRewriter().Visit(newRoot);
                     newRoot = new AutoImplementedPropertyRewriter().Visit(newRoot);
 
-                    finaltrees.Add(SyntaxTree.Create((CompilationUnitSyntax)newRoot));
+                    finaltrees.Add(CSharpSyntaxTree.Create((CSharpSyntaxNode)newRoot));
                 }
                 #endregion
 
-                compilation = Compilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
+                compilation = CSharpCompilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
                 compilation = compilation.AddSyntaxTrees(finaltrees);
 
                 #region LS2 IL Code Generation

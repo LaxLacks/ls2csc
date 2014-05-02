@@ -5,8 +5,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LS2IL
 {
@@ -18,11 +20,11 @@ namespace LS2IL
         {
             Compilation = compilation;
 
-            Functions = new Dictionary<MethodSymbol, LS2IL.Function>();
+            Functions = new Dictionary<IMethodSymbol, LS2IL.Function>();
             FunctionsByNumber = new List<LS2IL.Function>();
             EmittedChunkValues = new List<string>();
             ChunkValues = new List<FlatValue>();
-            TypeExtraInfo = new Dictionary<NamedTypeSymbol, TypeExtraInfo>();
+            TypeExtraInfo = new Dictionary<INamedTypeSymbol, TypeExtraInfo>();
             MetaValues = new Dictionary<string, FlatValue>();
 
             MetaValues.Add("Build Date", FlatValue.String(DateTime.UtcNow.ToString()+" UTC"));
@@ -36,19 +38,19 @@ namespace LS2IL
         public List<FlatValue> ChunkValues { get; private set; }
         public List<string> EmittedChunkValues { get; private set; }
         public Dictionary<string, LS2IL.FlatValue> MetaValues { get; private set; }
-        public Dictionary<NamedTypeSymbol, TypeExtraInfo> TypeExtraInfo { get; private set; }
+        public Dictionary<INamedTypeSymbol, TypeExtraInfo> TypeExtraInfo { get; private set; }
 
         //public Function EntryPoint { get; set; }
 
-        public Dictionary<MethodSymbol, LS2IL.Function> Functions { get; private set; }
+        public Dictionary<IMethodSymbol, LS2IL.Function> Functions { get; private set; }
         public List<Function> FunctionsByNumber { get; private set; }
 
         /// <summary>
-        /// Retrieves an existing TypeExtraInfo given a NamedTypeSymbol
+        /// Retrieves an existing TypeExtraInfo given a INamedTypeSymbol
         /// </summary>
         /// <param name="sym"></param>
         /// <returns></returns>
-        public TypeExtraInfo GetTypeExtraInfo(NamedTypeSymbol sym)
+        public TypeExtraInfo GetTypeExtraInfo(INamedTypeSymbol sym)
         {
             TypeExtraInfo tei;
             if (!TypeExtraInfo.TryGetValue(sym, out tei))
@@ -58,13 +60,13 @@ namespace LS2IL
 
         
         /// <summary>
-        /// Retrieves a TypeExtraInfo given a NamedTypeSymbol, instantiating a new one if necessary
+        /// Retrieves a TypeExtraInfo given a INamedTypeSymbol, instantiating a new one if necessary
         /// </summary>
         /// <param name="sym"></param>
         /// <param name="model"></param>
         /// <param name="isLibrary">true if the type is external and should not be generated into the Chunk</param>
         /// <returns></returns>
-        public TypeExtraInfo AddTypeExtraInfo(NamedTypeSymbol sym, SemanticModel model, bool isLibrary)
+        public TypeExtraInfo AddTypeExtraInfo(INamedTypeSymbol sym, SemanticModel model, bool isLibrary)
         {
             TypeExtraInfo tei;
             if (TypeExtraInfo.TryGetValue(sym, out tei))
@@ -78,36 +80,36 @@ namespace LS2IL
 
         public void AddFunction(IndexerDeclarationSyntax node, SemanticModel Model)
         {
-            PropertySymbol ms = Model.GetDeclaredSymbol(node);
+            IPropertySymbol ms = Model.GetDeclaredSymbol(node);
             throw new NotImplementedException("indexer");
         }
 
         public void AddFunction(MethodDeclarationSyntax node, SemanticModel Model)
         {
-            MethodSymbol ms = Model.GetDeclaredSymbol(node);
+            IMethodSymbol ms = Model.GetDeclaredSymbol(node);
             AddFunction(ms, Model);
         }
         public void AddFunction(ConstructorDeclarationSyntax node, SemanticModel Model)
         {
-            MethodSymbol ms = Model.GetDeclaredSymbol(node);
+            IMethodSymbol ms = Model.GetDeclaredSymbol(node);
             AddFunction(ms, Model);
         }
         public void AddFunction(DestructorDeclarationSyntax node, SemanticModel Model)
         {
-            MethodSymbol ms = Model.GetDeclaredSymbol(node);
+            IMethodSymbol ms = Model.GetDeclaredSymbol(node);
             AddFunction(ms, Model);
         }
         public void AddFunction(AccessorDeclarationSyntax node, SemanticModel Model)
         {
-            MethodSymbol ms = Model.GetDeclaredSymbol(node);
+            IMethodSymbol ms = Model.GetDeclaredSymbol(node);
             AddFunction(ms, Model);
         }
 
         /// <summary>
-        /// Adds a function to the chunk, also generating Chunk metadata if MethodSymbol.IsImplicitlyDeclared
+        /// Adds a function to the chunk, also generating Chunk metadata if IMethodSymbol.IsImplicitlyDeclared
         /// </summary>
         /// <param name="ms"></param>
-        public void AddFunction(MethodSymbol ms, SemanticModel Model)
+        public void AddFunction(IMethodSymbol ms, SemanticModel Model)
         {
             Function f;
             if (Functions.TryGetValue(ms, out f))
@@ -116,7 +118,7 @@ namespace LS2IL
             }
             int nFunction = FunctionsByNumber.Count;
             f = new Function(this, nFunction, Model, ms);
-            Functions.Add(f.MethodSymbol, f);
+            Functions.Add(f.IMethodSymbol, f);
             FunctionsByNumber.Add(f);
 
             if (ms.IsImplicitlyDeclared)
@@ -132,7 +134,7 @@ namespace LS2IL
         public void GenerateTypesMetadata()
         {
             FlatArrayBuilder fab = new FlatArrayBuilder();
-            foreach (KeyValuePair<NamedTypeSymbol, TypeExtraInfo> kvp in TypeExtraInfo)
+            foreach (KeyValuePair<INamedTypeSymbol, TypeExtraInfo> kvp in TypeExtraInfo)
             {
                 LS2IL.TypeExtraInfo.ClassMetadataGenerator cmg = kvp.Value.MetadataGenerator;
                 if (!cmg.IsLibrary)
@@ -167,7 +169,7 @@ namespace LS2IL
             output.WriteLine("; ---- begin chunk ----");
 
             
-            MethodSymbol entryPoint = Compilation.GetEntryPoint(CancellationToken.None);
+            IMethodSymbol entryPoint = Compilation.GetEntryPoint(CancellationToken.None);
 
 
             if (entryPoint != null)

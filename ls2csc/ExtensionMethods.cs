@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Collections.Immutable;
 using LS2IL;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp.Symbols;
 
 namespace LS2IL
 {
@@ -16,12 +19,24 @@ namespace LS2IL
         /// </summary>
         /// <param name="obj">a Method</param>
         /// <returns>the LS2IL Fully-Qualified Name</returns>
-        public static string GetFullyQualifiedName(this MethodSymbol obj)
+        public static string GetFullyQualifiedName(this IMethodSymbol obj)
         {
             if (string.IsNullOrEmpty(obj.Name))
                 throw new NotImplementedException("method has no name");
 
-            return obj.Name + obj.Parameters.ToString();
+            string parameters = "{";
+            int nParams = obj.Parameters.Count();
+            for (int nParam = 0 ; nParam< nParams ; nParam++)
+            {
+                if (nParam > 0)
+                {
+                    parameters += ",";
+                }
+                parameters += obj.Parameters[nParam].ToDisplayString();
+            }
+            parameters += "}";
+            
+            return obj.Name + parameters;
         }
 
         /// <summary>
@@ -30,7 +45,7 @@ namespace LS2IL
         /// </summary>
         /// <param name="obj"></param>
         /// <returns></returns>
-        public static string GetFullyQualifiedName(this NamespaceSymbol obj)
+        public static string GetFullyQualifiedName(this INamespaceSymbol obj)
         {
             string parentname = string.Empty;
 
@@ -49,7 +64,7 @@ namespace LS2IL
         /// </summary>
         /// <param name="obj"></param>
         /// <returns></returns>
-        public static string GetFullyQualifiedName(this TypeSymbol obj)
+        public static string GetFullyQualifiedName(this ITypeSymbol obj)
         {
             string objName = obj.Name;
             if (string.IsNullOrEmpty(objName))
@@ -59,7 +74,7 @@ namespace LS2IL
                     return "System.Array";
                 }
                 else
-                    throw new NotImplementedException("un-named TypeSymbol");
+                    throw new NotImplementedException("un-named ITypeSymbol");
             }
             string parentname = string.Empty;
 
@@ -80,13 +95,13 @@ namespace LS2IL
         /// <param name="obj">the Method to check for LS2Intrinsic</param>
         /// <param name="intrinsic">if the Method is intrinsic, returns the intrinsic Name for the intrinsics table</param>
         /// <returns>true if the Method is intrinsic</returns>
-        public static bool GetIntrinsic(this MethodSymbol obj, out string intrinsic)
+        public static bool GetIntrinsic(this IMethodSymbol obj, out string intrinsic)
         {
             intrinsic = null;
-            ReadOnlyArray<AttributeData> attribs = obj.GetAttributes();
+            ImmutableArray<AttributeData> attribs = obj.GetAttributes();
             foreach (AttributeData ad in attribs)
             {
-                NamedTypeSymbol ac = ad.AttributeClass;
+                INamedTypeSymbol ac = ad.AttributeClass;
                 if (ad.AttributeClass.Name == "LS2Intrinsic")
                 {
                     TypedConstant tc = ad.ConstructorArguments.Single();
@@ -105,13 +120,13 @@ namespace LS2IL
         /// <param name="obj">the Property to check for LS2Intrinsic</param>
         /// <param name="intrinsic">if the Property is intrinsic, returns the intrinsic Name for the intrinsics table</param>
         /// <returns>true if the Property is intrinsic</returns>
-        public static bool GetIntrinsic(this PropertySymbol obj, out string intrinsic)
+        public static bool GetIntrinsic(this IPropertySymbol obj, out string intrinsic)
         {
             intrinsic = null;
-            ReadOnlyArray<AttributeData> attribs = obj.GetAttributes();
+            ImmutableArray<AttributeData> attribs = obj.GetAttributes();
             foreach (AttributeData ad in attribs)
             {
-                NamedTypeSymbol ac = ad.AttributeClass;
+                INamedTypeSymbol ac = ad.AttributeClass;
                 if (ad.AttributeClass.Name == "LS2Intrinsic")
                 {
                     TypedConstant tc = ad.ConstructorArguments.Single();
@@ -131,19 +146,19 @@ namespace LS2IL
         /// <returns>true if the binary expression is a kind of Assignment</returns>
         public static bool IsAssignment(this BinaryExpressionSyntax bes)
         {
-            switch (bes.Kind)
+            switch (bes.CSharpKind())
             {
-                case SyntaxKind.AssignExpression:
-                case SyntaxKind.AddAssignExpression:
-                case SyntaxKind.AndAssignExpression:
-                case SyntaxKind.DivideAssignExpression:
-                case SyntaxKind.ExclusiveOrAssignExpression:
-                case SyntaxKind.LeftShiftAssignExpression:
-                case SyntaxKind.ModuloAssignExpression:
-                case SyntaxKind.MultiplyAssignExpression:
-                case SyntaxKind.OrAssignExpression:
-                case SyntaxKind.RightShiftAssignExpression:
-                case SyntaxKind.SubtractAssignExpression:
+                case SyntaxKind.SimpleAssignmentExpression:
+                case SyntaxKind.AddAssignmentExpression:
+                case SyntaxKind.AndAssignmentExpression:
+                case SyntaxKind.DivideAssignmentExpression:
+                case SyntaxKind.ExclusiveOrAssignmentExpression:
+                case SyntaxKind.LeftShiftAssignmentExpression:
+                case SyntaxKind.ModuloAssignmentExpression:
+                case SyntaxKind.MultiplyAssignmentExpression:
+                case SyntaxKind.OrAssignmentExpression:
+                case SyntaxKind.RightShiftAssignmentExpression:
+                case SyntaxKind.SubtractAssignmentExpression:
                     return true;
             }
             return false;

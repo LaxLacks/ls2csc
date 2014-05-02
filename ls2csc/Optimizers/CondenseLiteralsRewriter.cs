@@ -1,18 +1,19 @@
-﻿using System;
+﻿// http://roslyn.codeplex.com/wikipage?title=FAQ&referringTitle=Home#What%20happened%20to%20the%20REPL%20and%20hosting%20scripting%20APIs
+#if SCRIPTING_API_REINTRODUCED
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
-using Roslyn.Services;
-using Roslyn.Services.CSharp;
-using Roslyn.Scripting;
-using Roslyn.Scripting.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CSharp;
 
 namespace ls2csc.Optimizers
 {
-    class CondenseLiteralsRewriter : SyntaxRewriter
+    class CondenseLiteralsRewriter : CSharpSyntaxRewriter
     {
         CommonScriptEngine engine;
         Session session;
@@ -27,7 +28,7 @@ namespace ls2csc.Optimizers
             node = node.WithLeft((ExpressionSyntax)base.Visit((SyntaxNode)node.Left));
             node = node.WithRight((ExpressionSyntax)base.Visit((SyntaxNode)node.Right));
 
-            switch (node.Left.Kind)
+            switch (node.Left.CSharpKind())
             {
                 case SyntaxKind.CharacterLiteralExpression:
                 case SyntaxKind.FalseLiteralExpression:
@@ -38,7 +39,7 @@ namespace ls2csc.Optimizers
                 default:
                     return node;
             }
-            switch (node.Right.Kind)
+            switch (node.Right.CSharpKind())
             {
                 case SyntaxKind.CharacterLiteralExpression:
                 case SyntaxKind.FalseLiteralExpression:
@@ -53,30 +54,30 @@ namespace ls2csc.Optimizers
             dynamic nodeValue = (dynamic)session.Execute(node.ToFullString());
             if (nodeValue is String)
             {
-                return Syntax.LiteralExpression(SyntaxKind.StringLiteralExpression, Syntax.Literal(nodeValue));
+                return SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(nodeValue));
             }
             else if (nodeValue is Char)
             {
-                return Syntax.LiteralExpression(SyntaxKind.CharacterLiteralExpression, Syntax.Literal(nodeValue));
+                return SyntaxFactory.LiteralExpression(SyntaxKind.CharacterLiteralExpression, SyntaxFactory.Literal(nodeValue));
             }
             else if (nodeValue is Boolean)
             {
                 if (nodeValue == true)
                 {
-                    return Syntax.LiteralExpression(SyntaxKind.TrueLiteralExpression, Syntax.Token(SyntaxKind.TrueKeyword));
+                    return SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression, SyntaxFactory.Token(SyntaxKind.TrueKeyword));
                 }
                 else
                 {
-                    return Syntax.LiteralExpression(SyntaxKind.FalseLiteralExpression, Syntax.Token(SyntaxKind.FalseKeyword));
+                    return SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression, SyntaxFactory.Token(SyntaxKind.FalseKeyword));
                 }
             }
-            return Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(nodeValue));
+            return SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(nodeValue));
         }
 
         public override SyntaxNode VisitParenthesizedExpression(ParenthesizedExpressionSyntax node)
         {
             node = node.WithExpression((ExpressionSyntax)base.Visit((SyntaxNode)node.Expression));
-            switch (node.Expression.Kind)
+            switch (node.Expression.CSharpKind())
             {
                 case SyntaxKind.CharacterLiteralExpression:
                 case SyntaxKind.FalseLiteralExpression:
@@ -91,3 +92,4 @@ namespace ls2csc.Optimizers
     }
 
 }
+#endif

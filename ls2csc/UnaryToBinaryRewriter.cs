@@ -3,34 +3,36 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
-using Roslyn.Services;
-using Roslyn.Services.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp.Syntax.InternalSyntax;
 
 namespace ls2csc
 {
-    class PrefixUnaryToBinaryRewriter : SyntaxRewriter
+    class PrefixUnaryToBinaryRewriter : CSharpSyntaxRewriter
     {
         public override SyntaxNode VisitPrefixUnaryExpression(PrefixUnaryExpressionSyntax node)
         {
-            switch (node.Kind)
+            switch (node.CSharpKind())
             {
-                case SyntaxKind.PreIncrementExpression: 
-                    return Syntax.BinaryExpression(SyntaxKind.AddAssignExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(1)));
+                case SyntaxKind.PreIncrementExpression:
+                    return SyntaxFactory.BinaryExpression(SyntaxKind.AddAssignmentExpression, node.Operand, SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1)));
                 case SyntaxKind.PreDecrementExpression:
-                    return Syntax.BinaryExpression(SyntaxKind.SubtractAssignExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(1)));
-                case SyntaxKind.NegateExpression:
-                    if (node.Operand.Kind == SyntaxKind.NumericLiteralExpression)
+                    return SyntaxFactory.BinaryExpression(SyntaxKind.SubtractAssignmentExpression, node.Operand, SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1)));
+#if NEGATE_EXPRESSION
+                    case SyntaxKind.NegateExpression:
+                    if (node.Operand.CSharpKind() == SyntaxKind.NumericLiteralExpression)
                     {
                         dynamic newvalue = -((dynamic)((LiteralExpressionSyntax)node.Operand).Token.Value);
-                        return Syntax.LiteralExpression(SyntaxKind.NumericLiteralExpression, Syntax.Literal(newvalue));
+                        return SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(newvalue));
                     }
                     return node;
+#endif
                 case SyntaxKind.LogicalNotExpression:
-                    return Syntax.BinaryExpression(SyntaxKind.NotEqualsExpression, node.Operand, Syntax.LiteralExpression(SyntaxKind.TrueLiteralExpression));
+                    return SyntaxFactory.BinaryExpression(SyntaxKind.NotEqualsExpression, node.Operand, SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression));
             }
-            throw new NotImplementedException("Unary prefix " + node.Kind.ToString());
+            throw new NotImplementedException("Unary prefix " + node.CSharpKind().ToString());
         }
     }
 }

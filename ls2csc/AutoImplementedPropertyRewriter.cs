@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
-using Roslyn.Services;
-using Roslyn.Services.CSharp;
-using Roslyn.Services.Formatting;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp.Symbols;
+
 namespace ls2csc
 {
-    class AutoImplementedPropertyRewriter : SyntaxRewriter
+    class AutoImplementedPropertyRewriter : CSharpSyntaxRewriter
     {
         public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
         {
@@ -18,7 +18,7 @@ namespace ls2csc
             SyntaxList<MemberDeclarationSyntax> newMembers = new SyntaxList<MemberDeclarationSyntax>();
             foreach (MemberDeclarationSyntax member in node.Members)
             {
-                if (member.Kind == SyntaxKind.PropertyDeclaration)
+                if (member.CSharpKind() == SyntaxKind.PropertyDeclaration)
                 {
                     PropertyDeclarationSyntax prop = (PropertyDeclarationSyntax)member;
                     SyntaxList<AccessorDeclarationSyntax> newAccessors = new SyntaxList<AccessorDeclarationSyntax>();
@@ -27,15 +27,15 @@ namespace ls2csc
                     {
                         if (accessor.Body == null)
                         {
-                            switch (accessor.Kind)
+                            switch (accessor.CSharpKind())
                             {
                                 case SyntaxKind.GetAccessorDeclaration:
                                     implementfield = true;
-                                    newAccessors = newAccessors.Add(accessor.WithBody(Syntax.Block(Syntax.ReturnStatement(Syntax.IdentifierName("_" + prop.Identifier.ValueText)))));
+                                    newAccessors = newAccessors.Add(accessor.WithBody(SyntaxFactory.Block(SyntaxFactory.ReturnStatement(SyntaxFactory.IdentifierName("_" + prop.Identifier.ValueText)))));
                                     break;
                                 case SyntaxKind.SetAccessorDeclaration:
                                     implementfield = true;
-                                    newAccessors = newAccessors.Add(accessor.WithBody(Syntax.Block(Syntax.ExpressionStatement(Syntax.BinaryExpression(SyntaxKind.AssignExpression, Syntax.IdentifierName("_" + prop.Identifier.ValueText), Syntax.IdentifierName("value"))))));
+                                    newAccessors = newAccessors.Add(accessor.WithBody(SyntaxFactory.Block(SyntaxFactory.ExpressionStatement(SyntaxFactory.BinaryExpression(SyntaxKind.SimpleAssignmentExpression, SyntaxFactory.IdentifierName("_" + prop.Identifier.ValueText), SyntaxFactory.IdentifierName("value"))))));
                                     break;
                                 default:
                                     newAccessors = newAccessors.Add(accessor);
@@ -50,8 +50,8 @@ namespace ls2csc
                     if (implementfield)
                     {
                         SeparatedSyntaxList<VariableDeclaratorSyntax> variables = new SeparatedSyntaxList<VariableDeclaratorSyntax>();
-                        variables = variables.Add(Syntax.VariableDeclarator("_" + prop.Identifier.ValueText));
-                        newMembers = newMembers.Add(Syntax.FieldDeclaration(Syntax.VariableDeclaration(prop.Type, variables)));
+                        variables = variables.Add(SyntaxFactory.VariableDeclarator("_" + prop.Identifier.ValueText));
+                        newMembers = newMembers.Add(SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(prop.Type, variables)));
                     }
 
                     newMembers = newMembers.Add(prop.WithAccessorList(prop.AccessorList.WithAccessors(newAccessors)));

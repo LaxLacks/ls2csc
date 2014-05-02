@@ -5,21 +5,24 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Immutable;
 
 namespace LS2IL
 {
     class FieldExtraInfo
     {
         public string Name { get; set; }
-        public TypeSymbol Type { get; set; }
+        public ITypeSymbol Type { get; set; }
         public ExpressionSyntax Initializer { get; set; }
     }
 
     class TypeExtraInfo
     {
-        public TypeExtraInfo(Chunk chunk, SemanticModel model, NamedTypeSymbol cls, bool isLibrary)
+        public TypeExtraInfo(Chunk chunk, SemanticModel model, INamedTypeSymbol cls, bool isLibrary)
         {
             Chunk = chunk;
             Model = model;
@@ -38,7 +41,7 @@ namespace LS2IL
 
         public class ClassMetadataGenerator : FlatTableBuilder
         {
-            public ClassMetadataGenerator(Chunk chunk, SemanticModel model, NamedTypeSymbol cls, bool isLibrary)
+            public ClassMetadataGenerator(Chunk chunk, SemanticModel model, INamedTypeSymbol cls, bool isLibrary)
             {
                 Chunk = chunk;
                 Class = cls;
@@ -60,10 +63,10 @@ namespace LS2IL
             public bool IsLibrary { get; private set; }
             public Chunk Chunk { get; private set; }
             public SemanticModel Model { get; private set; }
-            public NamedTypeSymbol Class { get; private set; }
+            public INamedTypeSymbol Class { get; private set; }
             public List<FlatValue> Members { get; private set; }
 
-            public void Add(MethodSymbol ms)
+            public void Add(IMethodSymbol ms)
             {
                 if (IsLibrary)
                     return;
@@ -89,7 +92,7 @@ namespace LS2IL
                 Add(Model.GetDeclaredSymbol(node));
                 /*
                 FlatArrayBuilder fab = new FlatArrayBuilder();
-                MethodSymbol ms = Chunk.Model.GetDeclaredSymbol(node);
+                IMethodSymbol ms = Chunk.Model.GetDeclaredSymbol(node);
                 fab.Add(FlatValue.Int32(ms.IsStatic ? (int)ClassMemberType.StaticMethod : (int)ClassMemberType.Method));
                 fab.Add(FlatValue.String(ms.GetFullyQualifiedName()));
 
@@ -168,7 +171,7 @@ namespace LS2IL
                     FlatArrayBuilder valueList = new FlatArrayBuilder();
                     if (node.EqualsValue != null)
                     {
-                        if (node.EqualsValue.Value.Kind == SyntaxKind.NumericLiteralExpression)
+                        if (node.EqualsValue.Value.CSharpKind() == SyntaxKind.NumericLiteralExpression)
                         {
                             valueList.Add(FlatValue.Int32(int.Parse(node.EqualsValue.Value.ToString())));
                         }
@@ -237,16 +240,16 @@ namespace LS2IL
                 if (IsLibrary)
                     return;
 
-                Symbol s = Model.GetDeclaredSymbol(node);
+                ISymbol s = Model.GetDeclaredSymbol(node);
                 Function fGet = null;
                 Function fSet = null;
                 foreach (AccessorDeclarationSyntax ads in node.AccessorList.Accessors)
                 {
-                    switch (ads.Keyword.Kind)
+                    switch (ads.Keyword.CSharpKind())
                     {
                         case SyntaxKind.GetKeyword:
                             {
-                                MethodSymbol ms = Model.GetDeclaredSymbol(ads);
+                                IMethodSymbol ms = Model.GetDeclaredSymbol(ads);
                                 if (!Chunk.Functions.TryGetValue(ms, out fGet))
                                 {
                                     throw new NotImplementedException("Method not found " + ms.ToString());
@@ -255,7 +258,7 @@ namespace LS2IL
                             break;
                         case SyntaxKind.SetKeyword:
                             {
-                                MethodSymbol ms = Model.GetDeclaredSymbol(ads);
+                                IMethodSymbol ms = Model.GetDeclaredSymbol(ads);
                                 if (!Chunk.Functions.TryGetValue(ms, out fSet))
                                 {
                                     throw new NotImplementedException("Method not found " + ms.ToString());
@@ -263,7 +266,7 @@ namespace LS2IL
                             }
                             break;
                         default:
-                            throw new NotImplementedException("unhandled property accessor: " + ads.Keyword.Kind.ToString());
+                            throw new NotImplementedException("unhandled property accessor: " + ads.Keyword.CSharpKind().ToString());
                             break;
                     }
                 }
@@ -310,12 +313,12 @@ namespace LS2IL
                     return;
                 FlatArrayBuilder fab = new FlatArrayBuilder();
 
-                MethodSymbol s = Model.GetDeclaredSymbol(node);
+                IMethodSymbol s = Model.GetDeclaredSymbol(node);
                 fab.Add(FlatValue.Int32(s.IsStatic ? (int)ClassMemberType.StaticMethod : (int)ClassMemberType.Method));
 
                 fab.Add(FlatValue.String(s.GetFullyQualifiedName()));
 
-                MethodSymbol ms = Model.GetDeclaredSymbol(node);
+                IMethodSymbol ms = Model.GetDeclaredSymbol(node);
 
                 Function f;
                 if (!Chunk.Functions.TryGetValue(ms, out f))
@@ -330,7 +333,7 @@ namespace LS2IL
 
             public void AddMember(MemberDeclarationSyntax node)
             {
-                switch (node.Kind)
+                switch (node.CSharpKind())
                 {
                     case SyntaxKind.ConstructorDeclaration:
                         {
@@ -403,11 +406,11 @@ namespace LS2IL
                     ftb.Add("Base", FlatValue.String(this.Class.BaseType.GetFullyQualifiedName()));
                 }
 
-                ReadOnlyArray<NamedTypeSymbol> interfaces = this.Class.Interfaces;
-                if (interfaces != null && interfaces.Count > 0)
+                ImmutableArray<INamedTypeSymbol> interfaces = this.Class.Interfaces;
+                if (interfaces != null && interfaces.Count() > 0)
                 {
                     FlatArrayBuilder fab = new FlatArrayBuilder();
-                    foreach (NamedTypeSymbol iface in interfaces)
+                    foreach (INamedTypeSymbol iface in interfaces)
                     {
                         fab.Add(FlatValue.String(iface.GetFullyQualifiedName()));
                     }
@@ -420,7 +423,7 @@ namespace LS2IL
 
         public Chunk Chunk { get; private set; }
         public SemanticModel Model { get; private set; }
-        public NamedTypeSymbol Type { get; private set; }
+        public INamedTypeSymbol Type { get; private set; }
         public TypeExtraInfo Parent { get; private set; }
         public ClassMetadataGenerator MetadataGenerator { get; private set; }
 
@@ -475,7 +478,7 @@ namespace LS2IL
             return false;
         }
 
-        public void AddField(SyntaxTokenList modifiers, TypeSymbol type, VariableDeclaratorSyntax vds)
+        public void AddField(SyntaxTokenList modifiers, ITypeSymbol type, VariableDeclaratorSyntax vds)
         {
             if (vds.ArgumentList != null)
             {

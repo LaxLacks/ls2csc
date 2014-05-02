@@ -4,18 +4,21 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Immutable;
 
 namespace LS2IL
 {
     class Function
     {
-        public Function(Chunk chunk, int nFunction, SemanticModel model, MethodSymbol sym)
+        public Function(Chunk chunk, int nFunction, SemanticModel model, IMethodSymbol sym)
         {
             Chunk = chunk;
             Model = model;
-            MethodSymbol = sym;
+            IMethodSymbol = sym;
             NumFunction = nFunction;
 
             EmittedInstructions = new List<string>();
@@ -30,14 +33,14 @@ namespace LS2IL
 
         public void InitializeMetadata()
         {
-            MetaValues.Add("Name", FlatValue.String(MethodSymbol.Name));
-            MetaValues.Add("Fully Qualified Name", FlatValue.String(MethodSymbol.GetFullyQualifiedName()));
-            string typeFQN = MethodSymbol.ContainingType.GetFullyQualifiedName();
+            MetaValues.Add("Name", FlatValue.String(IMethodSymbol.Name));
+            MetaValues.Add("Fully Qualified Name", FlatValue.String(IMethodSymbol.GetFullyQualifiedName()));
+            string typeFQN = IMethodSymbol.ContainingType.GetFullyQualifiedName();
             MetaValues.Add("ContainingType", FlatValue.String(typeFQN));
-            MetaValues.Add("DisplayString", FlatValue.String(MethodSymbol.ToDisplayString()));
+            MetaValues.Add("DisplayString", FlatValue.String(IMethodSymbol.ToDisplayString()));
 
             string paramString = string.Empty;
-            foreach(ParameterSymbol ps in MethodSymbol.Parameters)
+            foreach(IParameterSymbol ps in IMethodSymbol.Parameters)
             {
                 string thisParam = string.Empty;
 
@@ -55,7 +58,7 @@ namespace LS2IL
 
         public Chunk Chunk { get; private set; }
         public SemanticModel Model { get; private set; }
-        public MethodSymbol MethodSymbol { get; private set; }
+        public IMethodSymbol IMethodSymbol { get; private set; }
 
         public int NumFunction { get; private set; }
         List<string> EmittedInstructions;
@@ -265,7 +268,7 @@ namespace LS2IL
 
             if (PackedRegisters > 256)
             {
-                throw new NotImplementedException("Too many registers used in function " + this.MethodSymbol.GetFullyQualifiedName());
+                throw new NotImplementedException("Too many registers used in function " + this.IMethodSymbol.GetFullyQualifiedName());
             }
 
             list = cfg.Flatten();
@@ -366,7 +369,7 @@ namespace LS2IL
             output.WriteLine("");
             output.WriteLine("; function[" + this.NumFunction.ToString() + "]");
             output.WriteLine("function");
-            output.WriteLine(";.inputs " + (this.MethodSymbol.Parameters.Count + (MethodSymbol.ReturnsVoid?0:1)).ToString());
+            output.WriteLine(";.inputs " + (this.IMethodSymbol.Parameters.Count() + (IMethodSymbol.ReturnsVoid?0:1)).ToString());
 
             EmitMetaTable(output);
             EmitValues(output);
@@ -385,14 +388,16 @@ namespace LS2IL
         {
             List<FlatStatement> list = new List<FlatStatement>();
 
-            ReadOnlyArray<SyntaxNode> roa = MethodSymbol.DeclaringSyntaxNodes;
-            if (roa == null || roa.Count==0)
+            ImmutableArray <SyntaxReference> roa = IMethodSymbol.DeclaringSyntaxReferences;
+
+            //ImmutableArray<SyntaxNode> roa = IMethodSymbol.DeclaringSyntaxNodes;
+            if (roa == null || roa.Count()==0)
                 return list;
 
-            SyntaxNode sn = roa.Single();
+            SyntaxNode sn = roa.Single().GetSyntax();
 
             BlockSyntax block;
-            switch (sn.Kind)
+            switch (sn.CSharpKind())
             {
                 case SyntaxKind.MethodDeclaration:
                     block = ((MethodDeclarationSyntax)sn).Body;
@@ -411,16 +416,16 @@ namespace LS2IL
                     block = ((DestructorDeclarationSyntax)sn).Body;
                     break;
                 default:
-                    throw new NotImplementedException("function kind "+sn.Kind.ToString());
+                    throw new NotImplementedException("function kind "+sn.CSharpKind().ToString());
                     break;
             }
 
             if (block == null)
             {
                 // abstract?
-                if (MethodSymbol.IsAbstract)
+                if (IMethodSymbol.IsAbstract)
                 {
-                    list.Add(FlatStatement.THROW(FlatOperand.LiteralString("Abstract "+MethodSymbol.MethodKind+" Method call")));
+                    list.Add(FlatStatement.THROW(FlatOperand.LiteralString("Abstract "+IMethodSymbol.MethodKind+" Method call")));
                     return list;
                 }
 
@@ -428,7 +433,7 @@ namespace LS2IL
 
                 /*
                 // interface?
-                if (this.MethodSymbol.ContainingType.TypeKind == TypeKind.Interface)
+                if (this.IMethodSymbol.ContainingType.TypeKind == TypeKind.Interface)
                 {
                     return list;
                 }
@@ -448,7 +453,7 @@ namespace LS2IL
             return list;        
         }
 
-        public FlatOperand TypeOf(FlatOperand subject, TypeSymbol known_type_or_null, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public FlatOperand TypeOf(FlatOperand subject, ITypeSymbol known_type_or_null, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             if (into_lvalue == null)
             {
@@ -460,7 +465,7 @@ namespace LS2IL
             return into_lvalue.AsRValue(FlatValue.Type(known_type_or_null));
         }
 
-        public FlatOperand Resolve(TypeSymbol type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public FlatOperand Resolve(ITypeSymbol type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             string type_fqn = type.GetFullyQualifiedName();
             if (into_lvalue == null)
@@ -484,7 +489,7 @@ namespace LS2IL
             {
                 case SymbolKind.NamedType:
                     {
-                        FlatOperand fop_type = Resolve((TypeSymbol)si.Symbol, into_lvalue, instructions);
+                        FlatOperand fop_type = Resolve((ITypeSymbol)si.Symbol, into_lvalue, instructions);
 
                         if (into_lvalue != null)
                         {
@@ -507,7 +512,7 @@ namespace LS2IL
             {
                 case SymbolKind.NamedType:
                     {
-                        FlatOperand fop_type = Resolve((TypeSymbol)si.Symbol, into_lvalue, instructions);
+                        FlatOperand fop_type = Resolve((ITypeSymbol)si.Symbol, into_lvalue, instructions);
 
                         if (into_lvalue != null)
                         {
@@ -537,10 +542,10 @@ namespace LS2IL
                 case SymbolKind.Parameter:
                     {
                         int nParameter = 0;
-                        if (!MethodSymbol.ReturnsVoid)
+                        if (!IMethodSymbol.ReturnsVoid)
                             nParameter++;
 
-                        foreach (ParameterSymbol ps in MethodSymbol.Parameters)
+                        foreach (IParameterSymbol ps in IMethodSymbol.Parameters)
                         {
                             if (name == ps.Name)
                             {
@@ -563,7 +568,7 @@ namespace LS2IL
                     {
                         if (si.Symbol.IsStatic)
                         {
-                            FieldSymbol field = (FieldSymbol)si.Symbol;
+                            IFieldSymbol field = (IFieldSymbol)si.Symbol;
                             TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
                             if (tei == null)
                             {
@@ -577,7 +582,7 @@ namespace LS2IL
                             }
 
                             FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
-                            FlatOperand fop_field = Resolve((FieldSymbol)si.Symbol, fop_type, null, instructions);
+                            FlatOperand fop_field = Resolve((IFieldSymbol)si.Symbol, fop_type, null, instructions);
 
 
                             if (into_lvalue == null)
@@ -592,7 +597,7 @@ namespace LS2IL
                         }
                         else
                         {
-                            FieldSymbol field = (FieldSymbol)si.Symbol;
+                            IFieldSymbol field = (IFieldSymbol)si.Symbol;
                             TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
                             if (tei == null)
                             {
@@ -621,7 +626,7 @@ namespace LS2IL
                         if (si.Symbol.IsStatic)
                         {
                             FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
-                            FlatOperand fop_property = Resolve((PropertySymbol)si.Symbol, fop_type, null, instructions);
+                            FlatOperand fop_property = Resolve((IPropertySymbol)si.Symbol, fop_type, null, instructions);
 
 
                             if (into_lvalue == null)
@@ -638,7 +643,7 @@ namespace LS2IL
                             // implied "this"
                             FlatValue thisValue = FlatValue.ObjectRef(si.Symbol.ContainingType);
                             FlatOperand fop_type = TypeOf(FlatOperand.ThisRef(thisValue), si.Symbol.ContainingType, null, instructions);
-                            FlatOperand fop_property = Resolve((PropertySymbol)si.Symbol, fop_type, null, instructions);
+                            FlatOperand fop_property = Resolve((IPropertySymbol)si.Symbol, fop_type, null, instructions);
 
                             if (into_lvalue == null)
                             {
@@ -656,7 +661,7 @@ namespace LS2IL
             throw new NotImplementedException(si.Symbol.Kind.ToString());
         }
 
-        public FlatOperand Resolve(MethodSymbol method, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public FlatOperand Resolve(IMethodSymbol method, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             string method_name = method.GetFullyQualifiedName();
 
@@ -678,7 +683,7 @@ namespace LS2IL
             return into_lvalue.AsRValue(FlatValue.Method(method));
         }
 
-        public bool GetRuntimeFieldNumber(FieldSymbol field, out int nField)
+        public bool GetRuntimeFieldNumber(IFieldSymbol field, out int nField)
         {
             TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
             if (tei == null)
@@ -697,7 +702,7 @@ namespace LS2IL
             return false;
         }
 
-        public FlatOperand Resolve(FieldSymbol field, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public FlatOperand Resolve(IFieldSymbol field, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             string field_name = field.Name;
 
@@ -733,7 +738,7 @@ namespace LS2IL
             throw new NotImplementedException("missing field from type " + field.ContainingType.GetFullyQualifiedName());
         }
 
-        public FlatOperand Resolve(PropertySymbol property, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public FlatOperand Resolve(IPropertySymbol property, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             string property_name = property.Name;
 
@@ -776,7 +781,7 @@ namespace LS2IL
             {
                 throw new NotImplementedException("name : value");
             }
-            if (arg.RefOrOutKeyword.Kind != SyntaxKind.None)
+            if (arg.RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
             {
                 throw new NotImplementedException("ref/out keyword");
             }
@@ -849,7 +854,7 @@ namespace LS2IL
                     {
                         throw new NotImplementedException("name : value");
                     }
-                    if (ars.RefOrOutKeyword.Kind != SyntaxKind.None)
+                    if (ars.RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
                     {
                         throw new NotImplementedException("ref/out keywords");
                     }
@@ -1033,7 +1038,7 @@ namespace LS2IL
                 throw new NotImplementedException("new with initializer");
             }
 
-            TypeInfo ti = Model.GetTypeInfo(node.Type);
+            TypeInfo ti = Model.GetTypeInfo(node);
            
             SymbolInfo si = Model.GetSymbolInfo(node);
 
@@ -1053,10 +1058,10 @@ namespace LS2IL
 
             if (si.Symbol.IsImplicitlyDeclared)
             {
-                Chunk.AddFunction((MethodSymbol)si.Symbol, Model);
+                Chunk.AddFunction((IMethodSymbol)si.Symbol, Model);
             }
 
-            FlatOperand fop_constructor = Resolve((MethodSymbol)si.Symbol,fop_type,null,instructions);
+            FlatOperand fop_constructor = Resolve((IMethodSymbol)si.Symbol,fop_type,null,instructions);
             
             FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList,null,null, instructions);
 
@@ -1174,7 +1179,7 @@ namespace LS2IL
                 case SymbolKind.Property:
                     {
 
-                        PropertySymbol property = (PropertySymbol)si.Symbol;
+                        IPropertySymbol property = (IPropertySymbol)si.Symbol;
 
                         // check for intrinsics
                         string intrinsic;
@@ -1224,7 +1229,7 @@ namespace LS2IL
                 case SymbolKind.Field:
                     {
 
-                        FieldSymbol field = (FieldSymbol)si.Symbol;
+                        IFieldSymbol field = (IFieldSymbol)si.Symbol;
 
                         if (si.Symbol.IsStatic)
                         {
@@ -1282,7 +1287,7 @@ namespace LS2IL
                 throw new NotImplementedException("non-Method invocation");
             }
 
-            MethodSymbol method = (MethodSymbol)si.Symbol;
+            IMethodSymbol method = (IMethodSymbol)si.Symbol;
             // check for intrinsics
             
             string intrinsic;
@@ -1340,7 +1345,7 @@ namespace LS2IL
                                 return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
                             }
 
-                            if (args.Arguments[0].RefOrOutKeyword.Kind != SyntaxKind.None)
+                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
                                 throw new NotImplementedException("ref or out keyword on " + args.Arguments[0].ToString());
                             FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
                             instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, input0_fop));
@@ -1356,7 +1361,7 @@ namespace LS2IL
                                 FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
                                 instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
 
-                                if (args.Arguments[0].RefOrOutKeyword.Kind != SyntaxKind.None)
+                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
                                     throw new NotImplementedException("ref or out keyword on " + args.Arguments[0].ToString());
                                 FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
 
@@ -1369,9 +1374,9 @@ namespace LS2IL
                                 return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
                             }
                             {
-                                if (args.Arguments[0].RefOrOutKeyword.Kind != SyntaxKind.None)
+                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
                                     throw new NotImplementedException("ref or out keyword on " + args.Arguments[0].ToString());
-                                if (args.Arguments[1].RefOrOutKeyword.Kind != SyntaxKind.None)
+                                if (args.Arguments[1].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
                                     throw new NotImplementedException("ref or out keyword on " + args.Arguments[1].ToString());
                                 FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
                                 FlatOperand input1_fop = ResolveExpression(args.Arguments[1].Expression, null, instructions);
@@ -1463,7 +1468,7 @@ namespace LS2IL
                                 return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
                             }
 
-                            if (args.Arguments[0].RefOrOutKeyword.Kind != SyntaxKind.None)
+                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
                                 throw new NotImplementedException("ref or out keyword on " + args.Arguments[0].ToString());
                             FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
                             instructions.Add(FlatStatement.FASTCALLMETHOD(fop_method, fop_subject, input0_fop));
@@ -1543,62 +1548,62 @@ namespace LS2IL
 
             switch (kind)
             {
-                case SyntaxKind.AddAssignExpression:
+                case SyntaxKind.AddAssignmentExpression:
                 case SyntaxKind.AddExpression:
                     {
                         instructions.Add(FlatStatement.ADD(into_lvalue, fop_left, fop_right));
                     }
                     break;
                 case SyntaxKind.BitwiseAndExpression:
-                case SyntaxKind.AndAssignExpression:
+                case SyntaxKind.AndAssignmentExpression:
                     {
                         instructions.Add(FlatStatement.AND(into_lvalue, fop_left, fop_right));
                     }
                     break;
                 case SyntaxKind.DivideExpression:
-                case SyntaxKind.DivideAssignExpression:
+                case SyntaxKind.DivideAssignmentExpression:
                     {
                         instructions.Add(FlatStatement.DIV(into_lvalue, fop_left, fop_right));
                     }
                     break;
                 case SyntaxKind.ExclusiveOrExpression:
-                case SyntaxKind.ExclusiveOrAssignExpression:
+                case SyntaxKind.ExclusiveOrAssignmentExpression:
                     {
                         instructions.Add(FlatStatement.XOR(into_lvalue, fop_left, fop_right));
                     }
                     break;
                 case SyntaxKind.LeftShiftExpression:
-                case SyntaxKind.LeftShiftAssignExpression:
+                case SyntaxKind.LeftShiftAssignmentExpression:
                     {
                         instructions.Add(FlatStatement.SHL(into_lvalue, fop_left, fop_right));
                     }
                     break;
                 case SyntaxKind.ModuloExpression:
-                case SyntaxKind.ModuloAssignExpression:
+                case SyntaxKind.ModuloAssignmentExpression:
                     {
                         instructions.Add(FlatStatement.MOD(into_lvalue, fop_left, fop_right));
                     }
                     break;
                 case SyntaxKind.MultiplyExpression:
-                case SyntaxKind.MultiplyAssignExpression:
+                case SyntaxKind.MultiplyAssignmentExpression:
                     {
                         instructions.Add(FlatStatement.MUL(into_lvalue, fop_left, fop_right));
                     }
                     break;
                 case SyntaxKind.BitwiseOrExpression:
-                case SyntaxKind.OrAssignExpression:
+                case SyntaxKind.OrAssignmentExpression:
                     {
                         instructions.Add(FlatStatement.OR(into_lvalue, fop_left, fop_right));
                     }
                     break;
                 case SyntaxKind.RightShiftExpression:
-                case SyntaxKind.RightShiftAssignExpression:
+                case SyntaxKind.RightShiftAssignmentExpression:
                     {
                         instructions.Add(FlatStatement.SHR(into_lvalue, fop_left, fop_right));
                     }
                     break;
                 case SyntaxKind.SubtractExpression:
-                case SyntaxKind.SubtractAssignExpression:
+                case SyntaxKind.SubtractAssignmentExpression:
                     {
                         instructions.Add(FlatStatement.SUB(into_lvalue, fop_left, fop_right));
                     }
@@ -1709,9 +1714,9 @@ namespace LS2IL
                         fop_type = TypeOf(fop_subject, null, null, instructions);
 
                         FlatOperand fop_Field;
-                        TypeSymbol typeSymbol;
+                        ITypeSymbol typeSymbol;
                         {
-                            FieldSymbol ps = (FieldSymbol)si.Symbol;
+                            IFieldSymbol ps = (IFieldSymbol)si.Symbol;
 
                             if (ps.IsStatic)
                             {
@@ -1724,7 +1729,7 @@ namespace LS2IL
 
                         FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
 
-                        if (node.Kind == SyntaxKind.AssignExpression)
+                        if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
                         {
                             fop_result = fop_right;
                         }
@@ -1734,7 +1739,7 @@ namespace LS2IL
                             lvalue_result = fop_result.GetLValue(this, instructions);
                             instructions.Add(FlatStatement.GETFIELD(lvalue_result, fop_Field, fop_subject));
 
-                            ResolveBinaryExpression(node.Kind, fop_result, fop_right, lvalue_result, instructions);
+                            ResolveBinaryExpression(node.CSharpKind(), fop_result, fop_right, lvalue_result, instructions);
                         }
 
 
@@ -1750,9 +1755,9 @@ namespace LS2IL
                         fop_type = TypeOf(fop_subject, null, null, instructions);
 
                         FlatOperand fop_property;
-                        TypeSymbol typeSymbol;
+                        ITypeSymbol typeSymbol;
                         {
-                            PropertySymbol ps = (PropertySymbol)si.Symbol;
+                            IPropertySymbol ps = (IPropertySymbol)si.Symbol;
 
                             if (ps.IsStatic)
                             {
@@ -1765,7 +1770,7 @@ namespace LS2IL
 
                         FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
 
-                        if (node.Kind == SyntaxKind.AssignExpression)
+                        if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
                         {
                             fop_result = fop_right;
                         }
@@ -1775,7 +1780,7 @@ namespace LS2IL
                             lvalue_result = fop_result.GetLValue(this, instructions);
                             instructions.Add(FlatStatement.GETPROPERTY(lvalue_result, fop_property, fop_subject));
 
-                            ResolveBinaryExpression(node.Kind, fop_result, fop_right, lvalue_result, instructions);
+                            ResolveBinaryExpression(node.CSharpKind(), fop_result, fop_right, lvalue_result, instructions);
                         }
 
 
@@ -1790,7 +1795,7 @@ namespace LS2IL
                         fop_subject = ResolveExpression(node.Left, null, instructions);
 
 
-                        if (node.Kind == SyntaxKind.AssignExpression)
+                        if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
                         {
                             if (into_lvalue == null)
                             {
@@ -1804,7 +1809,7 @@ namespace LS2IL
                         else
                         {
                             FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
-                            ResolveBinaryExpression(node.Kind, fop_subject, fop_right, fop_subject.GetLValue(this, instructions), instructions);
+                            ResolveBinaryExpression(node.CSharpKind(), fop_subject, fop_right, fop_subject.GetLValue(this, instructions), instructions);
                             return fop_subject;
                         }
                     }
@@ -1820,7 +1825,7 @@ namespace LS2IL
 
         }
 
-        public FlatOperand ResolveExpression(LiteralExpressionSyntax les, TypeSymbol result_type)
+        public FlatOperand ResolveExpression(LiteralExpressionSyntax les, ITypeSymbol result_type)
         {
             FlatValue val = FlatValue.FromLiteralToken(result_type, les.Token);
             return FlatOperand.Immediate(val);
@@ -1836,7 +1841,7 @@ namespace LS2IL
 
             FlatOperand left = ResolveExpression(node.Left, null, instructions);
             FlatOperand right = ResolveExpression(node.Right, null, instructions);
-            return ResolveBinaryExpression(node.Kind, left, right, into_lvalue, instructions);
+            return ResolveBinaryExpression(node.CSharpKind(), left, right, into_lvalue, instructions);
 
         }
 
@@ -1858,8 +1863,8 @@ namespace LS2IL
                     // need the parent object for the field 
                     fop_subject = ResolveParentExpression(si, pues.Operand, null, instructions);
 
-                    TypeSymbol typeSymbol;
-                    FieldSymbol ps = (FieldSymbol)si.Symbol;
+                    ITypeSymbol typeSymbol;
+                    IFieldSymbol ps = (IFieldSymbol)si.Symbol;
                         
                     if (ps.IsStatic)
                     {
@@ -1884,7 +1889,7 @@ namespace LS2IL
 
                     instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
 
-                    switch (pues.Kind)
+                    switch (pues.CSharpKind())
                     {
                         case SyntaxKind.PostIncrementExpression:
                             instructions.Add(FlatStatement.ADD(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int8(1))));
@@ -1904,9 +1909,9 @@ namespace LS2IL
                         FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
 
                         FlatOperand fop_Field;
-                        TypeSymbol typeSymbol;
+                        ITypeSymbol typeSymbol;
                         {
-                            FieldSymbol ps = (FieldSymbol)si.Symbol;
+                            IFieldSymbol ps = (IFieldSymbol)si.Symbol;
 
                             if (ps.IsStatic)
                             {
@@ -1923,7 +1928,7 @@ namespace LS2IL
                         instructions.Add(FlatStatement.GETFIELD(fop_currentlvalue, fop_Field, fop_subject));
                         instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
 
-                        switch (pues.Kind)
+                        switch (pues.CSharpKind())
                         {
                             case SyntaxKind.PostIncrementExpression:
                                 instructions.Add(FlatStatement.ADD(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int32(1))));
@@ -1944,9 +1949,9 @@ namespace LS2IL
                         FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
 
                         FlatOperand fop_property;
-                        TypeSymbol typeSymbol;
+                        ITypeSymbol typeSymbol;
                         {
-                            PropertySymbol ps = (PropertySymbol)si.Symbol;
+                            IPropertySymbol ps = (IPropertySymbol)si.Symbol;
 
                             if (ps.IsStatic)
                             {
@@ -1963,7 +1968,7 @@ namespace LS2IL
                         instructions.Add(FlatStatement.GETPROPERTY(fop_currentlvalue, fop_property, fop_subject));
                         instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
 
-                        switch (pues.Kind)
+                        switch (pues.CSharpKind())
                         {
                             case SyntaxKind.PostIncrementExpression:
                                 instructions.Add(FlatStatement.ADD(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int32(1))));
@@ -1984,7 +1989,7 @@ namespace LS2IL
                         
                         instructions.Add(FlatStatement.DUPLICATE(into_lvalue, op));
 
-                        switch (pues.Kind)
+                        switch (pues.CSharpKind())
                         {
                             case SyntaxKind.PostIncrementExpression:
                                 instructions.Add(FlatStatement.ADD(op.GetLValue(this, instructions), op, FlatOperand.Immediate(FlatValue.Int32(1))));
@@ -2002,7 +2007,7 @@ namespace LS2IL
                     break;
             }
 
-            throw new NotImplementedException("postfix unary " + pues.Kind.ToString());
+            throw new NotImplementedException("postfix unary " + pues.CSharpKind().ToString());
         }
 
         /// <summary>
@@ -2016,10 +2021,12 @@ namespace LS2IL
         {
             TypeInfo result_type = Model.GetTypeInfo(node);
             // resultant type of the expression
+#if IMPLICIT_CONVERSION_HAS_A_REPLACEMENT_then_i_dont_know_what_it_is
             if (!result_type.ImplicitConversion.IsIdentity && !result_type.ImplicitConversion.IsImplicit)
             {
                 throw new NotImplementedException("type conversion");
             }
+#endif
             if (node is PredefinedTypeSyntax)
             {
                 /*
@@ -2034,7 +2041,7 @@ namespace LS2IL
                 {
                     case SymbolKind.NamedType:
                         {
-                            FlatOperand fop_type = Resolve((TypeSymbol)si.Symbol, into_lvalue, instructions);
+                            FlatOperand fop_type = Resolve((ITypeSymbol)si.Symbol, into_lvalue, instructions);
 
                             return fop_type;
                         }
@@ -2053,7 +2060,8 @@ namespace LS2IL
             {
                 PrefixUnaryExpressionSyntax pues = (PrefixUnaryExpressionSyntax)node;
                 FlatOperand right = ResolveExpression(pues.Operand, into_lvalue, instructions);
-                switch (pues.Kind)
+#if NEGATE_EXPRESSION
+                switch (pues.CSharpKind())
                 {
                     case SyntaxKind.NegateExpression:
                         if (into_lvalue != null)
@@ -2066,8 +2074,9 @@ namespace LS2IL
                         instructions.Add(FlatStatement.NEGATE(into_lvalue, right));
                         return left;
                 }
+#endif
 
-                throw new NotImplementedException("Prefix unary " + pues.Kind.ToString());
+                throw new NotImplementedException("Prefix unary " + pues.CSharpKind().ToString());
             }
             if (node is BinaryExpressionSyntax)
             {
@@ -2158,7 +2167,7 @@ namespace LS2IL
         {
             if (node.Expression != null)
             {
-                if (this.MethodSymbol.ReturnsVoid)
+                if (this.IMethodSymbol.ReturnsVoid)
                 {
                     throw new NotImplementedException("returning a value from a void function");
                 }
@@ -2202,7 +2211,7 @@ namespace LS2IL
             }
         }
 
-        public void Flatten(TypeSymbol type, VariableDeclaratorSyntax vds, List<FlatStatement> instructions)
+        public void Flatten(ITypeSymbol type, VariableDeclaratorSyntax vds, List<FlatStatement> instructions)
         {
             if (vds.ArgumentList != null)
             {
@@ -2344,7 +2353,7 @@ namespace LS2IL
         {
             if (expr is LiteralExpressionSyntax)
             {
-                switch (expr.Kind)
+                switch (expr.CSharpKind())
                 {
                     case SyntaxKind.TrueLiteralExpression:
                         if (ss_jump_if_value)
@@ -2355,14 +2364,14 @@ namespace LS2IL
                             instructions.Add(FlatStatement.JMP(FlatOperand.LabelRef(ss_jump_label)));
                         return;
                 }
-                throw new NotImplementedException("literal expression " + expr.Kind.ToString());
+                throw new NotImplementedException("literal expression " + expr.CSharpKind().ToString());
             }
             if (expr is BinaryExpressionSyntax)
             {
                 BinaryExpressionSyntax condition = expr as BinaryExpressionSyntax;
 
 
-                switch (condition.Kind)
+                switch (condition.CSharpKind())
                 {
                     case SyntaxKind.LogicalAndExpression:
                         {
@@ -2399,7 +2408,7 @@ namespace LS2IL
                 FlatOperand opnd_left = ResolveExpression(condition.Left, null, instructions);
                 FlatOperand opnd_right = ResolveExpression(condition.Right, null, instructions);
 
-                switch (condition.Kind)
+                switch (condition.CSharpKind())
                 {
                     case SyntaxKind.GreaterThanOrEqualExpression:
                         if (ss_jump_if_value)
@@ -2438,7 +2447,7 @@ namespace LS2IL
                             instructions.Add(FlatStatement.JNE(FlatOperand.LabelRef(ss_jump_label), opnd_left, opnd_right));
                         return;
                     default:
-                        throw new NotImplementedException("binary expression " + condition.Kind);
+                        throw new NotImplementedException("binary expression " + condition.CSharpKind());
                 }
 
                 throw new NotImplementedException();
@@ -2625,7 +2634,7 @@ namespace LS2IL
 
                 foreach (SwitchLabelSyntax sls in sss.Labels)
                 {
-                    if (sls.CaseOrDefaultKeyword.Kind == SyntaxKind.CaseKeyword)
+                    if (sls.CaseOrDefaultKeyword.CSharpKind() == SyntaxKind.CaseKeyword)
                     {
                         FlatOperand fop_test = ResolveExpression(sls.Value, null, instructions);
 
@@ -2633,7 +2642,7 @@ namespace LS2IL
                         instructions.Add(FlatStatement.JE(FlatOperand.LabelRef(labelName), fop_subject, fop_test));
                         
                     }
-                    else if (sls.CaseOrDefaultKeyword.Kind == SyntaxKind.DefaultKeyword)
+                    else if (sls.CaseOrDefaultKeyword.CSharpKind() == SyntaxKind.DefaultKeyword)
                     {
                         bHasDefault = true;
                     }
@@ -2659,13 +2668,13 @@ namespace LS2IL
 
                 foreach (SwitchLabelSyntax sls in sss.Labels)
                 {
-                    if (sls.CaseOrDefaultKeyword.Kind == SyntaxKind.CaseKeyword)
+                    if (sls.CaseOrDefaultKeyword.CSharpKind() == SyntaxKind.CaseKeyword)
                     {
                         string labelName = prefix + "case[" + sls.Value.ToString() + "]";
                         instructions.Add(FlatStatement.LABEL(FlatOperand.LabelRef(labelName)));
 
                     }
-                    else if (sls.CaseOrDefaultKeyword.Kind == SyntaxKind.DefaultKeyword)
+                    else if (sls.CaseOrDefaultKeyword.CSharpKind() == SyntaxKind.DefaultKeyword)
                     {
                         instructions.Add(FlatStatement.LABEL(FlatOperand.LabelRef(defaultCaseLabel)));
                     }
@@ -2696,7 +2705,7 @@ namespace LS2IL
             {
                 foreach (SwitchLabelSyntax sls in sss.Labels)
                 {
-                    if (sls.CaseOrDefaultKeyword.Kind == SyntaxKind.CaseKeyword)
+                    if (sls.CaseOrDefaultKeyword.CSharpKind() == SyntaxKind.CaseKeyword)
                     {
                         if (!(sls.Value is LiteralExpressionSyntax))
                         {
@@ -2710,7 +2719,7 @@ namespace LS2IL
                         string labelName = prefix + "case[" + fop.ImmediateValue.ValueText+"]";
                         ftb.Add(fop.ImmediateValue.Object.ToString(), FlatValue.Label(labelName)); // these will be post-processed to instruction numbers
                     }
-                    else if (sls.CaseOrDefaultKeyword.Kind == SyntaxKind.DefaultKeyword)
+                    else if (sls.CaseOrDefaultKeyword.CSharpKind() == SyntaxKind.DefaultKeyword)
                     {
                         bHasDefault = true;
                     }
@@ -2747,7 +2756,7 @@ namespace LS2IL
 
                 foreach (SwitchLabelSyntax sls in sss.Labels)
                 {
-                    if (sls.CaseOrDefaultKeyword.Kind == SyntaxKind.DefaultKeyword)
+                    if (sls.CaseOrDefaultKeyword.CSharpKind() == SyntaxKind.DefaultKeyword)
                     {
                         instructions.Add(FlatStatement.LABEL(FlatOperand.LabelRef(defaultCaseLabel)));
                     }
@@ -2891,7 +2900,7 @@ namespace LS2IL
         //     Gets a SyntaxToken that represents the semi-colon at the end of the statement.
         public SyntaxToken SemicolonToken { get; }
              */
-            switch(node.CaseOrDefaultKeyword.Kind)
+            switch(node.CaseOrDefaultKeyword.CSharpKind())
             {
                 case SyntaxKind.DefaultKeyword:
                     break;
@@ -3012,7 +3021,7 @@ namespace LS2IL
 
         public void FlattenStatement(StatementSyntax ss, List<FlatStatement> instructions)
         {
-            switch (ss.Kind)
+            switch (ss.CSharpKind())
             {
                 case SyntaxKind.Block:
                     Flatten((BlockSyntax)ss,instructions);
@@ -3080,10 +3089,10 @@ namespace LS2IL
                 case SyntaxKind.UnsafeStatement:
                 case SyntaxKind.YieldBreakStatement:
                 case SyntaxKind.YieldReturnStatement:
-                    throw new NotImplementedException("statement type " + ss.GetType().ToString() + ": " + ss.Kind.ToString());
+                    throw new NotImplementedException("statement type " + ss.GetType().ToString() + ": " + ss.CSharpKind().ToString());
                     break;
                 default:
-                    throw new NotImplementedException("statement type " + ss.GetType().ToString() + ": " + ss.Kind.ToString());
+                    throw new NotImplementedException("statement type " + ss.GetType().ToString() + ": " + ss.CSharpKind().ToString());
                     break;
             }
         }

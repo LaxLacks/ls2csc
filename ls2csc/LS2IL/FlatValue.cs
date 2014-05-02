@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Roslyn.Compilers;
-using Roslyn.Compilers.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace LS2IL
 {
@@ -84,20 +84,20 @@ namespace LS2IL
             System_Type = null;
         }
 
-        public static TypeSymbol System_Array { get; set; }
-        public static TypeSymbol System_Exception { get; set; }
-        //public static TypeSymbol System_Int32 {get;set;}
-        public static TypeSymbol System_Object { get; set; }
-        public static TypeSymbol System_String { get; set; }
-        public static TypeSymbol System_Void { get; set; }
-        //public static TypeSymbol System_Null { get; set; }
+        public static ITypeSymbol System_Array { get; set; }
+        public static ITypeSymbol System_Exception { get; set; }
+        //public static ITypeSymbol System_Int32 {get;set;}
+        public static ITypeSymbol System_Object { get; set; }
+        public static ITypeSymbol System_String { get; set; }
+        public static ITypeSymbol System_Void { get; set; }
+        //public static ITypeSymbol System_Null { get; set; }
 
 
-        public static TypeSymbol System_Type { get; set; }
-        public static TypeSymbol System_Method { get; set; }
-        public static TypeSymbol System_StaticMethod { get; set; }
-        public static TypeSymbol System_Property { get; set; }
-        public static TypeSymbol System_StaticProperty { get; set; }
+        public static ITypeSymbol System_Type { get; set; }
+        public static ITypeSymbol System_Method { get; set; }
+        public static ITypeSymbol System_StaticMethod { get; set; }
+        public static ITypeSymbol System_Property { get; set; }
+        public static ITypeSymbol System_StaticProperty { get; set; }
     }
 
     class FlatValue
@@ -194,16 +194,16 @@ namespace LS2IL
         }
 
 
-        public static FlatValue FromLiteralToken(TypeSymbol type, SyntaxToken token)
+        public static FlatValue FromLiteralToken(ITypeSymbol type, SyntaxToken token)
         {
-            if (token.Kind == SyntaxKind.StringLiteralToken)
+            if (token.CSharpKind() == SyntaxKind.StringLiteralToken)
                 return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = "\""+token.ValueText.Replace("\"","\\\"")+"\"" };
-            if (token.Kind == SyntaxKind.CharacterLiteralToken)
+            if (token.CSharpKind() == SyntaxKind.CharacterLiteralToken)
                 return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = "'" + token.ValueText + "'" };
             return new FlatValue() { ValueType = GetFlatValueType(type), Object = token.Value, ValueText = token.ValueText };
         }
 
-        public static FlatValue FromType(TypeSymbol type)
+        public static FlatValue FromType(ITypeSymbol type)
         {
             return new FlatValue() { ValueType = GetFlatValueType(type) };
         }
@@ -213,7 +213,7 @@ namespace LS2IL
             return new FlatValue() { ValueType = FlatValueType.VT_Table };
         }
 
-        public static FlatValueType GetFlatValueType(TypeSymbol type)
+        public static FlatValueType GetFlatValueType(ITypeSymbol type)
         {
             switch (type.SpecialType)
             {
@@ -295,31 +295,31 @@ namespace LS2IL
         {
             return new FlatValue() { ValueType = FlatValueType.VT_String,  ValueText = "\"" + value + "\"", Object = value };
         }
-        public static FlatValue Type(TypeSymbol type)
+        public static FlatValue Type(ITypeSymbol type)
         {
             return new FlatValue() { ValueType = FlatValueType.VT_Type, Object = type };
         }
-        public static FlatValue StaticMethod(MethodSymbol value)
+        public static FlatValue StaticMethod(IMethodSymbol value)
         {
             return new FlatValue() { ValueType = FlatValueType.VT_StaticMethod, Object = value };
         }
-        public static FlatValue Method(MethodSymbol value)
+        public static FlatValue Method(IMethodSymbol value)
         {
             return new FlatValue() { ValueType = FlatValueType.VT_Method,Object = value };
         }
-        public static FlatValue StaticProperty(PropertySymbol value)
+        public static FlatValue StaticProperty(IPropertySymbol value)
         {
             return new FlatValue() { ValueType = FlatValueType.VT_StaticProperty, Object = value };
         }
-        public static FlatValue Property(PropertySymbol value)
+        public static FlatValue Property(IPropertySymbol value)
         {
             return new FlatValue() { ValueType = FlatValueType.VT_Property,  Object = value };
         }
-        public static FlatValue StaticField(FieldSymbol value)
+        public static FlatValue StaticField(IFieldSymbol value)
         {
             return new FlatValue() { ValueType = FlatValueType.VT_StaticField, Object = value };
         }
-        public static FlatValue Field(FieldSymbol value)
+        public static FlatValue Field(IFieldSymbol value)
         {
             return new FlatValue() { ValueType = FlatValueType.VT_Field,  Object = value };
         }
@@ -333,7 +333,7 @@ namespace LS2IL
             return new FlatValue() { ValueType = FlatValueType.VT_Label, ValueText = valuetext };
         }
 
-        public static FlatValue ObjectRef(TypeSymbol type)
+        public static FlatValue ObjectRef(ITypeSymbol type)
         {
             return new FlatValue() { ValueType = GetFlatValueType(type)}; 
         }
