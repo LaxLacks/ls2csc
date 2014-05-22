@@ -58,6 +58,7 @@ namespace ls2csc
         {
             Methods = new Dictionary<string, IntrinsicMethod>();
 
+            Methods.Add("Object.GetType", new IntrinsicMethod_GetType());
             Methods.Add("Object.ToString", new IntrinsicMethod_ToString());
             Methods.Add("Object.GetMetaTable", new IntrinsicMethod_GetMetaTable());
 
@@ -90,6 +91,38 @@ namespace ls2csc
             }
             instructions.Add(FlatStatement.LEN(into_lvalue, fop_subject));
             return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+        }
+    }
+
+    class IntrinsicMethod_GetType : IntrinsicMethod
+    {
+
+        public override bool IsStatic
+        {
+            get { return false; }
+        }
+
+        public override FlatOperand Resolve(InvocationExpressionSyntax node, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
+        {
+            if (!(node.Expression is MemberAccessExpressionSyntax))
+            {
+                throw new NotImplementedException("GetType not on MemberAccessExpressionSyntax");
+            }
+
+            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)node.Expression;
+
+
+            FlatOperand fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
+
+            if (into_lvalue == null)
+            {
+                FlatOperand fop_register = function.AllocateRegister("");
+                into_lvalue = fop_register.GetLValue(function, instructions);
+            }
+            instructions.Add(FlatStatement.TYPEOF(into_lvalue, fop_subject));
+            return into_lvalue.AsRValue(FlatValue.Type(si.Symbol.ContainingType));
+
+
         }
     }
 

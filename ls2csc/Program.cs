@@ -95,13 +95,15 @@ namespace ls2csc
             String outputFile = "";
             bool help = false;
             int silence = 0;
+            bool bootstrap = false;
 
             OptionSet Options = new OptionSet(){
                 {"i|input=", "Input {file}", v => { inputFiles.Add(v); }},
                 {"r|reference=", "Reference {file}", v => { referenceFiles.Add(v); }},
                 {"o|output=", "Output {file}", v => { outputFile = v; }},
                 {"h|?|help", "Show this help and exit", v => { help = (v != null); }},
-                {"s|silent", "Silence, 1 per level", v => { silence++; }}
+                {"s|silent", "Silence, 1 per level", v => { silence++; }},
+                {"b|bootstrap", "LS2 Bootstrap compiler mode", v => { bootstrap = (v != null); }}
             };
 
             Options.Parse(args);
@@ -110,6 +112,11 @@ namespace ls2csc
             {
                 System.Console.Error.WriteLine("C# Compiler for LavishScript 2.0 Virtual Machine");
                 System.Console.Error.WriteLine("- Building for LS2IL version " + LS2IL.Chunk.LS2ILVersion);
+            }
+
+            if (bootstrap)
+            {
+                System.Console.Error.WriteLine("- LS2 Bootstrap compiler mode");
             }
 
             if (help)
@@ -130,27 +137,46 @@ namespace ls2csc
                 output = System.Console.Out;
             }
 
-            if (inputFiles.Count != 0)
+            if (bootstrap)
             {
-                foreach (string inputfile in inputFiles)
+                if (inputFiles.Count != 0)
                 {
-                    if (silence <= 0)
-                    {
-                        System.Console.Error.WriteLine("Attempting to compile from file '" + inputfile + "'");
-                    }
-                    
-                    inputTrees.Add(CSharpSyntaxTree.ParseFile(inputfile));
+                    System.Console.Error.WriteLine("Input files ignored in Bootstrap compiler mode.");
                 }
+                inputFiles = new List<string>();
+
+                string text = string.Empty;
+                text += "#define BOOTSTRAP_MODE" + System.Environment.NewLine;
+                text += Resources.Instance.DeserializeStream("ls2csc.Libraries.BootStrap.cs");
+                SyntaxTree tree = CSharpSyntaxTree.ParseText(text);
+                // syntaxTrees.Add(tree);
+                inputTrees.Add(tree);
             }
             else
             {
+
+                if (inputFiles.Count != 0)
+                {
+
+                    foreach (string inputfile in inputFiles)
+                    {
+                        if (silence <= 0)
+                        {
+                            System.Console.Error.WriteLine("Attempting to compile from file '" + inputfile + "'");
+                        }
+
+                        inputTrees.Add(CSharpSyntaxTree.ParseFile(inputfile));
+                    }
+                }
+                else
+                {
 #if !USEPREDEF
-                System.Console.Error.WriteLine("ls2csc: Filename required");
-                System.Console.Error.WriteLine("ls2csc: To display help, use 'ls2csc -h'");
-                return;
+                    System.Console.Error.WriteLine("ls2csc: Filename required");
+                    System.Console.Error.WriteLine("ls2csc: To display help, use 'ls2csc -h'");
+                    return;
 #endif
 
-                // this mess is for testing.
+                    // this mess is for testing.
 #if USEPREDEF
                 string predef = @"
 /* expected
@@ -253,15 +279,15 @@ namespace ls2csctest
                 System.Console.WriteLine(predef);
                 inputtrees.Add(SyntaxTree.ParseText(predef));
 #endif
+                }
             }
-
 #if OUTPUTEXCEPTIONS
             try
 #endif
             {
                 // get libraries!
 
-                List<SyntaxTree> syntaxTrees = new List<SyntaxTree>();
+                //List<SyntaxTree> syntaxTrees = new List<SyntaxTree>();
                 List<SyntaxTree> referenceTrees = new List<SyntaxTree>();
 
                 #region Metadata == Declarations == "Libraries"
@@ -270,25 +296,39 @@ namespace ls2csctest
                                               "ls2csc.Libraries.LavishScriptAPI.cs", 
                                               "ls2csc.Libraries.LavishScript2.cs", 
                                               "ls2csc.Libraries.LavishSettings.cs", 
-                                              "ls2csc.Libraries.System.cs" 
+                                              "ls2csc.Libraries.System.cs",
+                                              "ls2csc.Libraries.BootStrap.cs"
                                           };
+                
 
-                foreach(string s in auto_reference)
+                foreach (string s in auto_reference)
                 {
-                    SyntaxTree tree = CSharpSyntaxTree.ParseText(Resources.Instance.DeserializeStream(s));
-                    syntaxTrees.Add(tree);
+                    string text = string.Empty;
+                    if (bootstrap)
+                    {
+                        if (s.Contains("BootStrap"))
+                        {
+                            continue;
+                        }
+                        text += "#define BOOTSTRAP_MODE" + System.Environment.NewLine;
+                    }
+                    text += Resources.Instance.DeserializeStream(s);
+                    SyntaxTree tree = CSharpSyntaxTree.ParseText(text);
+                   // syntaxTrees.Add(tree);
                     referenceTrees.Add(tree);
                 }
+
+
 
                 foreach (string s in referenceFiles)
                 {
                     SyntaxTree tree = CSharpSyntaxTree.ParseFile(s);
-                    syntaxTrees.Add(tree);
+                    //syntaxTrees.Add(tree);
                     referenceTrees.Add(tree);
                 }
                 #endregion
 
-                Compilation compilation = CSharpCompilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
+                Compilation compilation = CSharpCompilation.Create("MyCompilation", syntaxTrees: referenceTrees);
 
 
                 compilation = compilation.AddSyntaxTrees(inputTrees);
@@ -335,19 +375,34 @@ namespace ls2csctest
                 }
                 #endregion
 
+
+
+                {
+                    List<SyntaxTree> finalReferenceTrees = new List<SyntaxTree>();
+                    foreach (SyntaxTree tree in referenceTrees)
+                    {
+
+                        SyntaxNode root = tree.GetRoot();
+                        root = new EnumValueRewriter().Visit(root);
+                        root = new AutoImplementedPropertyRewriter().Visit(root);
+                        finalReferenceTrees.Add((CSharpSyntaxTree.Create((CSharpSyntaxNode)root)));
+                    }
+                    referenceTrees = finalReferenceTrees;
+                }
                 #region C# Code Transformations: Optimizations and other rewriters
                 List<SyntaxTree> finaltrees = new List<SyntaxTree>();
 
                 foreach (SyntaxTree tree in inputTrees)
                 {
                     SyntaxNode newRoot = tree.GetRoot();
+                    SemanticModel model = compilation.GetSemanticModel(tree);
 
                     newRoot = new EnumValueRewriter().Visit(newRoot);
 #if SCRIPTING_API_REINTRODUCED
                     newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);
 #endif
                     newRoot = new PrefixUnaryToBinaryRewriter().Visit(newRoot);
-                    newRoot = new FieldInitializerRewriter().Visit(newRoot);
+                    newRoot = new FieldInitializerRewriter(model).Visit(newRoot);
                     newRoot = new ForeachRewriter().Visit(newRoot);
                     newRoot = new AutoImplementedPropertyRewriter().Visit(newRoot);
 
@@ -355,7 +410,7 @@ namespace ls2csctest
                 }
                 #endregion
 
-                compilation = CSharpCompilation.Create("MyCompilation", syntaxTrees: syntaxTrees);
+                compilation = CSharpCompilation.Create("MyCompilation", syntaxTrees: referenceTrees);
                 compilation = compilation.AddSyntaxTrees(finaltrees);
 
                 #region LS2 IL Code Generation
@@ -367,7 +422,6 @@ namespace ls2csctest
                     SemanticModel model = compilation.GetSemanticModel(tree);
 
                     SyntaxNode root = tree.GetRoot();
-
                     // Build up the metadata
                     DeclarationCollector dc = new DeclarationCollector(chunk, model, true); // isLibrary = true because these are the reference-only trees
                     dc.Visit(root);

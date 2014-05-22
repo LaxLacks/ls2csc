@@ -33,9 +33,9 @@ namespace LS2IL
             StaticFieldNames = new Dictionary<string, int>();
             MetadataGenerator = new ClassMetadataGenerator(chunk, model, cls,isLibrary);
 
-            if (Type.ContainingType != null)
+            if (Type.BaseType != null)
             {
-                Parent = Chunk.AddTypeExtraInfo(Type.ContainingType, Model, isLibrary);
+                BaseType = Chunk.AddTypeExtraInfo(Type.BaseType, Model, isLibrary);
             }
         }
 
@@ -66,6 +66,37 @@ namespace LS2IL
             public INamedTypeSymbol Class { get; private set; }
             public List<FlatValue> Members { get; private set; }
 
+            public FlatArrayBuilder GenerateInputDeclarations(IMethodSymbol ms)
+            {
+                FlatArrayBuilder fab = new FlatArrayBuilder();
+                if (!ms.ReturnsVoid)
+                {
+                    FlatArrayBuilder decl = new FlatArrayBuilder();
+                    // name
+                    decl.Add(FlatValue.String(""));
+                    // type
+                    decl.Add(FlatValue.String(ms.ReturnType.GetFullyQualifiedName()));
+                    // csharp declaration
+                    decl.Add(FlatValue.String(ms.ReturnType.GetFullyQualifiedName()));
+
+                    fab.Add(decl.GetFlatValue());
+                }
+                foreach(IParameterSymbol param in ms.Parameters)
+                {
+                    FlatArrayBuilder decl = new FlatArrayBuilder();
+                    // name
+                    decl.Add(FlatValue.String(param.Name));
+                    // type
+                    decl.Add(FlatValue.String(param.Type.GetFullyQualifiedName()));
+                    // csharp declaration
+                    decl.Add(FlatValue.String(param.Type.GetFullyQualifiedName()+" "+param.Name));
+
+                    fab.Add(decl.GetFlatValue());
+                }
+
+                return fab;
+            }
+
             public void Add(IMethodSymbol ms)
             {
                 if (IsLibrary)
@@ -81,6 +112,9 @@ namespace LS2IL
                 }
 
                 fab.Add(FlatValue.Int32(f.NumFunction));
+
+                // input declarations
+                fab.Add(GenerateInputDeclarations(ms).GetFlatValue());
 
                 Members.Add(fab.GetFlatValue());
             }
@@ -328,6 +362,8 @@ namespace LS2IL
 
                 fab.Add(FlatValue.Int32(f.NumFunction));
 
+                fab.Add(GenerateInputDeclarations(ms).GetFlatValue());
+
                 Members.Add(fab.GetFlatValue());
             }
 
@@ -424,7 +460,7 @@ namespace LS2IL
         public Chunk Chunk { get; private set; }
         public SemanticModel Model { get; private set; }
         public INamedTypeSymbol Type { get; private set; }
-        public TypeExtraInfo Parent { get; private set; }
+        public TypeExtraInfo BaseType { get; private set; }
         public ClassMetadataGenerator MetadataGenerator { get; private set; }
 
         public List<FieldExtraInfo> Fields { get; private set; }
@@ -434,23 +470,36 @@ namespace LS2IL
 
         public int GetFullyQualifiedField(int from_number)
         {
-            TypeExtraInfo parent = Parent;
-            while (parent != null)
+            TypeExtraInfo baseType = BaseType;
+            while (baseType != null)
             {
-                from_number += parent.Fields.Count;
-                parent = parent.Parent;
+                from_number += baseType.Fields.Count;
+                baseType = baseType.BaseType;
             }
             return from_number;
         }
         public int GetFullyQualifiedStaticField(int from_number)
         {
-            TypeExtraInfo parent = Parent;
+            TypeExtraInfo parent = BaseType;
             while (parent != null)
             {
                 from_number += parent.StaticFields.Count;
-                parent = parent.Parent;
+                parent = parent.BaseType;
             }
             return from_number;
+        }
+
+        public bool ResolveLocalField(string name, out int nField)
+        {
+            int nValue;
+            if (FieldNames.TryGetValue(name, out nValue))
+            {
+                nField = nValue;// GetFullyQualifiedField(nValue);
+                return true;
+            }
+
+            nField = -1;
+            return false;
         }
 
         public bool ResolveRuntimeField(string name, out int nField)
@@ -459,6 +508,19 @@ namespace LS2IL
             if (FieldNames.TryGetValue(name, out nValue))
             {
                 nField = GetFullyQualifiedField(nValue);
+                return true;
+            }
+
+            nField = -1;
+            return false;
+        }
+
+        public bool ResolveLocalStaticField(string name, out int nField)
+        {
+            int nValue;
+            if (StaticFieldNames.TryGetValue(name, out nValue))
+            {
+                nField = nValue;// GetFullyQualifiedStaticField(nValue);
                 return true;
             }
 

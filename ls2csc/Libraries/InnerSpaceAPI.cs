@@ -1,6 +1,6 @@
 ﻿namespace InnerSpaceAPI
 {
-    public class InnerSpace
+    public sealed class InnerSpace
     {
         static public void Echo(string s);
         static public uint BuildNumber { get; }

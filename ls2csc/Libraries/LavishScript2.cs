@@ -1,7 +1,7 @@
 ﻿namespace LavishScript2
 {
 
-    public class InputDeclaration
+    public sealed class InputDeclaration
     {
         public System.String CSharpDeclaration { get; }
         public System.String Name { get; }
@@ -11,7 +11,7 @@
     /// <summary>
     /// A Module is an extension of the LavishScript 2 environment, via the C++ API
     /// </summary>
-    public class Module
+    public sealed class Module
     {
         public string Name { get; }
         public string Filename { get; }
@@ -31,7 +31,7 @@
     /// <summary>
     /// A Script is a LavishScript 2 program registered with the environment
     /// </summary>
-    public class Script
+    public sealed class Script
     {
         public string Name { get; }
         public string Filename { get; }
@@ -52,7 +52,7 @@
     /// <summary>
     /// A Thread is a microthread hosted by the environment, and operating on LavishScript 2 bytecode
     /// </summary>
-    public class Thread
+    public sealed class Thread
     {
         public uint ID { get; }
         public bool IsStarted { get; }
@@ -67,20 +67,20 @@
         public void Stop();
     }
 
-    public class Method
+    public sealed class Method
     {
         public InputDeclaration[] InputDeclarations { get; }
         public Type ParentType { get; }
 
     }
 
-    public class StaticMethod
+    public sealed class StaticMethod
     {
         public InputDeclaration[] InputDeclarations { get; }
         public Type ParentType { get; }
     }
 
-    public class Property
+    public sealed class Property
     {
         public Type ParentType { get; }
         public Type PropertyType { get; }
@@ -92,7 +92,7 @@
         public void Set(object subject, object value);
     }
 
-    public class StaticProperty
+    public sealed class StaticProperty
     {
         public Type ParentType { get; }
         public Type PropertyType { get; }
@@ -104,7 +104,7 @@
         public void Set(object value);
     }
 
-    public class Field
+    public sealed class Field
     {
         public System.Object Get(System.Object subject);
         public void Set(System.Object subject, System.Object value);
@@ -114,7 +114,7 @@
         public LavishScript2.Type ParentType { get; }
     }
 
-    public class StaticField
+    public sealed class StaticField
     {
         public System.String CSharpDeclaration { get; }
         public System.String Name { get; }
@@ -125,7 +125,7 @@
     /// <summary>
     /// A Type is a type of object as defined within the environment
     /// </summary>
-    public class Type
+    public sealed class Type
     {
         public string Name { get; }
         public Type ParentType { get; }
@@ -141,7 +141,7 @@
         public static Type[] AllTypes { get; }
     }
 
-    public class Table : System.Collections.IEnumerable
+    public sealed class Table : System.Collections.IEnumerable
     {
         public System.Collections.IEnumerator GetEnumerator();
 

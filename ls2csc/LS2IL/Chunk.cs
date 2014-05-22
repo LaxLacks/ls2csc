@@ -14,7 +14,7 @@ namespace LS2IL
 {
     class Chunk
     {
-        public const string LS2ILVersion = "0.9.20121123.1";
+        public const string LS2ILVersion = "0.10.20140522.1";
 
         public Chunk(Compilation compilation)
         {
@@ -188,7 +188,7 @@ namespace LS2IL
                 LS2IL.Function f = FunctionsByNumber[i];
                 
                 // TODO: command-line options for these 3 flags
-                f.FlattenToInstructions(true, true, true);
+                f.FlattenToInstructions(true, true, true, true);
             }
 
             GenerateTypesMetadata();

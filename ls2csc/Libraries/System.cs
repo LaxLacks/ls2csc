@@ -175,21 +175,41 @@ namespace System
 
         [LS2Intrinsic("Object.GetMetaTable")]
         public virtual LavishScript2.Table GetMetaTable();
+
+        [LS2Intrinsic("Object.GetType")]
+        public virtual LavishScript2.Type GetType();
     }
 
     public struct Void
     {
     }
 
+    /*
+#if !BOOTSTRAP_MODE
     public class Exception
     {
-        public virtual string Message { get; }
-    }
+        public Exception()
+        {
 
-    public class LS2Exception : Exception
-    {
-        
+        }
+
+        public Exception(string message)
+        {
+            Message = message;
+        }
+
+        public Exception(string message, Exception innerException)
+        {
+            Message = message;
+            InnerException = innerException;
+        }
+
+        public virtual string Message { get; set; }
+        public Exception InnerException { get; private set; }
+        public virtual string Source { get; set; }
     }
+#endif
+    /**/
 
     public class String
     {

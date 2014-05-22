@@ -250,7 +250,7 @@ namespace LS2IL
             }
         }
 
-        public void FlattenToInstructions(bool flattenLabels, bool bFilterUnusedInstructions, bool condenseRegisters)
+        public void FlattenToInstructions(bool flattenLabels, bool bFilterUnusedInstructions, bool condenseRegisters, bool elevateLongValues)
         {
             List<FlatStatement> list = Flatten();
 
@@ -272,6 +272,31 @@ namespace LS2IL
             }
 
             list = cfg.Flatten();
+            
+            foreach(FlatStatement fs in list)
+            {
+                if (fs.Operands == null)
+                    continue;
+
+                string emitted = fs.Emit();
+                if (emitted.Length < 192)
+                    continue;
+
+                // let's shorten this baby up.
+                for (int i = 0; i < fs.Operands.Count; i++ )
+                {
+                    FlatOperand fo = fs.Operands[i];
+                    if (fo.OperandType != FlatOperandType.OPND_IMMEDIATE)
+                        continue;
+
+                    if (fo.ImmediateValue.ToString().Length > 63)
+                    {
+                        int nValue = FunctionValues.Count;
+                        FunctionValues.Add(fo.ImmediateValue);
+                        fs.Operands[i] = FlatOperand.FunctionValueRef(nValue, fo.ImmediateValue);
+                    }
+                }
+            }
 
             if (flattenLabels)
             {
@@ -576,7 +601,7 @@ namespace LS2IL
                             }
 
                             int nField;
-                            if (!tei.ResolveRuntimeStaticField(field.Name, out nField))
+                            if (!tei.ResolveLocalStaticField(field.Name, out nField))
                             {
                                 throw new NotImplementedException("field " + field.Name + " not found in type " + field.ContainingType.GetFullyQualifiedName());
                             }
@@ -722,7 +747,7 @@ namespace LS2IL
             int nField;
             if (!field.IsStatic)
             {
-                if (tei.FieldNames.TryGetValue(field_name, out nTypeField) && tei.ResolveRuntimeField(field_name, out nField))
+                if (tei.FieldNames.TryGetValue(field_name, out nTypeField) && tei.ResolveLocalField(field_name, out nField))
                 {
                     FieldExtraInfo fei = tei.Fields[nTypeField];
                     instructions.Add(FlatStatement.RESOLVEFIELD(into_lvalue, fop_type, FlatOperand.Immediate(FlatValue.Int32(nField))));
@@ -821,6 +846,86 @@ namespace LS2IL
             return list;
         }
 
+
+        public FlatOperand ResolveExpressionsToArray(IEnumerable<ExpressionSyntax> expressions, FlatOperand return_reference, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            if (into_lvalue == null)
+            {
+                FlatOperand register_fop = AllocateRegister("");
+                into_lvalue = register_fop.GetLValue(this, instructions);
+            }
+
+            FlatValue literalArray;
+            FlatOperand fop_array;
+
+            bool allLiteral = (return_reference == null);
+            if (allLiteral)
+            {
+                foreach (ExpressionSyntax es in expressions)
+                {
+                    if (!(es is LiteralExpressionSyntax))
+                    {
+                        allLiteral = false;
+                    }
+                }
+
+
+                if (allLiteral)
+                {
+                    FlatArrayBuilder fab = new FlatArrayBuilder();
+
+                    foreach (ExpressionSyntax es in expressions)
+                    {
+                        LiteralExpressionSyntax les = (LiteralExpressionSyntax)es;
+                        // get the type
+                        TypeInfo ti = Model.GetTypeInfo(les);
+                        FlatOperand fop_element = ResolveExpression(les, ti.ConvertedType);
+                        fab.Add(fop_element.ImmediateValue);
+                    }
+
+                    literalArray = fab.GetFlatValue();
+                   // if (literalArray.ToString().Length < 192) // max instruction size is 255 bytes, this has to fit
+                    {
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, FlatOperand.Immediate(literalArray)));
+                        fop_array = into_lvalue.AsRValue(literalArray);
+                        return fop_array;
+                    }
+                }
+            }
+
+            // generate a new array
+            literalArray = new FlatValue(FlatValueType.VT_Array, "{ }", null);
+            instructions.Add(FlatStatement.DUPLICATE(into_lvalue, FlatOperand.Immediate(literalArray)));
+
+            fop_array = into_lvalue.AsRValue(literalArray);
+
+            if (return_reference != null)
+            {
+                instructions.Add(FlatStatement.ADD(into_lvalue, fop_array, return_reference));
+            }
+
+            foreach (ExpressionSyntax es in expressions)
+            {
+                /*
+                        // Summary:
+                        //     ExpressionSyntax node representing the argument.
+                        public ExpressionSyntax Expression { get; }
+                        //
+                        // Summary:
+                        //     NameColonSyntax node representing the optional name arguments.
+                        public NameColonSyntax NameColon { get; }
+                        //
+                        // Summary:
+                        //     SyntaxToken representing the optional ref or out keyword.
+                        public SyntaxToken RefOrOutKeyword { get; }
+                /**/
+                FlatOperand fop_element = ResolveExpression(es, null, instructions);
+                instructions.Add(FlatStatement.ADD(into_lvalue, fop_array, fop_element));
+            }
+
+            return fop_array;
+        }
+
         public FlatOperand ResolveArgumentsToArray(ArgumentListSyntax args, FlatOperand return_reference, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             if (into_lvalue == null)
@@ -880,9 +985,12 @@ namespace LS2IL
                     }
 
                     literalArray = fab.GetFlatValue();
-                    instructions.Add(FlatStatement.DUPLICATE(into_lvalue, FlatOperand.Immediate(literalArray)));
-                    fop_array = into_lvalue.AsRValue(literalArray);
-                    return fop_array;
+                   // if (literalArray.ToString().Length < 192) // max instruction size is 255 bytes, this has to fit
+                    {
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, FlatOperand.Immediate(literalArray)));
+                        fop_array = into_lvalue.AsRValue(literalArray);
+                        return fop_array;
+                    }
                 }
             }
 
@@ -1033,11 +1141,6 @@ namespace LS2IL
         //     TypeSyntax representing the type of the object being created.
         public TypeSyntax Type { get; }
              */
-            if (node.Initializer != null)
-            {
-                throw new NotImplementedException("new with initializer");
-            }
-
             TypeInfo ti = Model.GetTypeInfo(node);
            
             SymbolInfo si = Model.GetSymbolInfo(node);
@@ -1067,7 +1170,35 @@ namespace LS2IL
 
             instructions.Add(FlatStatement.NEWOBJECT(into_lvalue, fop_constructor, fop_args));
 
-            return into_lvalue.AsRValue(FlatValue.FromType(ti.ConvertedType));
+
+            FlatOperand fop_rvalue = into_lvalue.AsRValue(FlatValue.FromType(ti.ConvertedType));
+
+            if (node.Initializer != null)
+            {
+               // throw new NotImplementedException("new with initializer");
+
+                // apply statements from the initializer.
+                foreach(ExpressionSyntax es in node.Initializer.Expressions)
+                {
+                    if (es is BinaryExpressionSyntax)
+                    {
+                        BinaryExpressionSyntax bes = (BinaryExpressionSyntax)es;
+                        ResolveExpression(bes, result_type, null, fop_rvalue, instructions);
+                    }
+                    else
+                    {
+                        ResolveExpression(es, null, instructions);
+                    }
+                    /*
+                    if (node.IsAssignment())
+                    {
+                        return ResolveAssignmentExpression(node, result_type, into_lvalue, null, instructions);
+                    }
+                    /**/
+                }
+            }
+
+            return fop_rvalue;
         }
 
         public FlatOperand Resolve(ElementAccessExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
@@ -1147,6 +1278,29 @@ namespace LS2IL
             throw new NotImplementedException();
         }
 
+        public FlatOperand Resolve(InitializerExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            /*
+        // Summary:
+        //     SyntaxToken representing the close brace.
+        public SyntaxToken CloseBraceToken { get; }
+        //
+        // Summary:
+        //     SeparatedSyntaxList of ExpressionSyntax representing the list of expressions
+        //     in the initializer expression.
+        public SeparatedSyntaxList<ExpressionSyntax> Expressions { get; }
+        //
+        // Summary:
+        //     SyntaxToken representing the open brace.
+        public SyntaxToken OpenBraceToken { get; }
+             */
+            if (node.CSharpKind() == SyntaxKind.ArrayInitializerExpression)
+            {
+                return ResolveExpressionsToArray(node.Expressions, null, into_lvalue, instructions);
+            }
+            throw new NotImplementedException();
+        }
+
         public FlatOperand Resolve(CastExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             /*
@@ -1167,8 +1321,6 @@ namespace LS2IL
         public TypeSyntax Type { get; }
         /**/
             return ResolveExpression(node.Expression, into_lvalue, instructions);
-            
-            throw new NotImplementedException("type-cast expression");
         }
 
         public FlatOperand Resolve(MemberAccessExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
@@ -1249,7 +1401,7 @@ namespace LS2IL
 
                         {
                             FlatOperand fop_subject = ResolveExpression(node.Expression, null, instructions);
-                            FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
+                            FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
 
                             FlatOperand fop_field = Resolve(field, fop_type, null, instructions);
 
@@ -1626,7 +1778,7 @@ namespace LS2IL
             return into_lvalue.AsRValue(fop_left.ImmediateValue);
         }
 
-        public FlatOperand ResolveParentExpression(SymbolInfo si,SyntaxNode sn, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public FlatOperand ResolveParentExpression(SymbolInfo si,SyntaxNode sn, FlatOperand into_lvalue, FlatOperand parent_op, List<FlatStatement> instructions)
         {
             if (sn is MemberAccessExpressionSyntax)
             {
@@ -1642,10 +1794,18 @@ namespace LS2IL
                             // it's a field, with no member access
                             if (si.Symbol.IsStatic)
                             {
-                                throw new NotImplementedException();
+                                return Resolve(si.Symbol.ContainingType, into_lvalue, instructions);
                             }
                             // and it's not static.
 
+                            if (parent_op != null)
+                            {
+                                if (into_lvalue != null)
+                                {
+                                    instructions.Add(FlatStatement.REFERENCE(into_lvalue, parent_op));
+                                }
+                                return parent_op;
+                            }
                             // must be from "this".
                             FlatValue val = FlatValue.FromType(si.Symbol.ContainingType);
                             if (into_lvalue != null)
@@ -1658,13 +1818,21 @@ namespace LS2IL
                         break;
                     case SymbolKind.Property:
                         {
-                            // it's a field, with no member access
+                            // it's a property, with no member access
                             if (si.Symbol.IsStatic)
                             {
-                                throw new NotImplementedException();
+                                return Resolve(si.Symbol.ContainingType, into_lvalue, instructions);
                             }
                             // and it's not static.
 
+                            if (parent_op != null)
+                            {
+                                if (into_lvalue != null)
+                                {
+                                    instructions.Add(FlatStatement.REFERENCE(into_lvalue, parent_op));
+                                } 
+                                return parent_op;
+                            }
                             // must be from "this".
                             FlatValue val = FlatValue.FromType(si.Symbol.ContainingType);
                             if (into_lvalue != null)
@@ -1683,7 +1851,7 @@ namespace LS2IL
             throw new NotImplementedException();
         }
 
-        public FlatOperand ResolveAssignmentExpression(BinaryExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public FlatOperand ResolveAssignmentExpression(BinaryExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, FlatOperand parent_op, List<FlatStatement> instructions)
         {
             FlatOperand fop_result;
             FlatOperand lvalue_result;
@@ -1710,21 +1878,24 @@ namespace LS2IL
             {
                 case SymbolKind.Field:
                     {
-                        fop_subject = ResolveParentExpression(si, node.Left, null, instructions);
-                        fop_type = TypeOf(fop_subject, null, null, instructions);
+                        fop_subject = ResolveParentExpression(si, node.Left, null, parent_op, instructions);
+                        fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
+                            //TypeOf(fop_subject, null, null, instructions);
 
                         FlatOperand fop_Field;
-                        ITypeSymbol typeSymbol;
+                       // ITypeSymbol typeSymbol;
+                        IFieldSymbol ps = (IFieldSymbol)si.Symbol;
                         {
-                            IFieldSymbol ps = (IFieldSymbol)si.Symbol;
-
+                            /*
                             if (ps.IsStatic)
                             {
-                                throw new NotImplementedException("static field assignment");
+                                fop_Field = Resolve(ps, fop_type, null, instructions);
                             }
-
-                            typeSymbol = ps.Type;
-                            fop_Field = Resolve(ps, fop_type, null, instructions);
+                            else/**/
+                            {
+                                //typeSymbol = ps.Type;
+                                fop_Field = Resolve(ps, fop_type, null, instructions);
+                            }
                         }
 
                         FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
@@ -1737,34 +1908,37 @@ namespace LS2IL
                         {
                             fop_result = AllocateRegister("");
                             lvalue_result = fop_result.GetLValue(this, instructions);
-                            instructions.Add(FlatStatement.GETFIELD(lvalue_result, fop_Field, fop_subject));
-
+                            if (ps.IsStatic)
+                            {
+                                instructions.Add(FlatStatement.GETSTATICFIELD(lvalue_result, fop_Field));
+                            }
+                            else
+                            {
+                                instructions.Add(FlatStatement.GETFIELD(lvalue_result, fop_Field, fop_subject));
+                            }
                             ResolveBinaryExpression(node.CSharpKind(), fop_result, fop_right, lvalue_result, instructions);
                         }
 
-
-
-
-                        instructions.Add(FlatStatement.SETFIELD(fop_Field, fop_subject, fop_result));
+                        if (ps.IsStatic)
+                        {
+                            instructions.Add(FlatStatement.SETSTATICFIELD(fop_Field, fop_result));
+                        }
+                        else
+                        {
+                            instructions.Add(FlatStatement.SETFIELD(fop_Field, fop_subject, fop_result));
+                        }
                         return fop_result;
                     }
                     break;
                 case SymbolKind.Property:
                     {
-                        fop_subject = ResolveParentExpression(si, node.Left, null, instructions);
+                        fop_subject = ResolveParentExpression(si, node.Left, null, parent_op, instructions);
                         fop_type = TypeOf(fop_subject, null, null, instructions);
 
                         FlatOperand fop_property;
-                        ITypeSymbol typeSymbol;
-                        {
+                        //ITypeSymbol typeSymbol;
                             IPropertySymbol ps = (IPropertySymbol)si.Symbol;
-
-                            if (ps.IsStatic)
-                            {
-                                throw new NotImplementedException("static property assignment");
-                            }
-
-                            typeSymbol = ps.Type;
+                        {
                             fop_property = Resolve(ps, fop_type, null, instructions);
                         }
 
@@ -1778,15 +1952,27 @@ namespace LS2IL
                         {
                             fop_result = AllocateRegister("");
                             lvalue_result = fop_result.GetLValue(this, instructions);
-                            instructions.Add(FlatStatement.GETPROPERTY(lvalue_result, fop_property, fop_subject));
-
+                            if (ps.IsStatic)
+                            {
+                                instructions.Add(FlatStatement.GETSTATICPROPERTY(lvalue_result, fop_property));
+                            }
+                            else
+                            {
+                                instructions.Add(FlatStatement.GETPROPERTY(lvalue_result, fop_property, fop_subject));
+                            }
                             ResolveBinaryExpression(node.CSharpKind(), fop_result, fop_right, lvalue_result, instructions);
                         }
 
 
 
-
-                        instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_result));
+                        if (ps.IsStatic)
+                        {
+                            instructions.Add(FlatStatement.SETSTATICPROPERTY(fop_property, fop_result));
+                        }
+                        else
+                        {
+                            instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_result));
+                        }
                         return fop_result;
                     }
                     break;
@@ -1832,11 +2018,11 @@ namespace LS2IL
         }
 
 
-        public FlatOperand ResolveExpression(BinaryExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public FlatOperand ResolveExpression(BinaryExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, FlatOperand parent_op, List<FlatStatement> instructions)
         {
             if (node.IsAssignment())
             {
-                return ResolveAssignmentExpression(node, result_type, into_lvalue, instructions);
+                return ResolveAssignmentExpression(node, result_type, into_lvalue, parent_op, instructions);
             }
 
             FlatOperand left = ResolveExpression(node.Left, null, instructions);
@@ -1905,8 +2091,9 @@ namespace LS2IL
                 break;*/
                 case SymbolKind.Field:
                     {
-                        fop_subject = ResolveParentExpression(si, pues.Operand, null, instructions);
-                        FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
+                        fop_subject = ResolveParentExpression(si, pues.Operand, null,null, instructions);
+                        //FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
+                        FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
 
                         FlatOperand fop_Field;
                         ITypeSymbol typeSymbol;
@@ -1945,7 +2132,7 @@ namespace LS2IL
                     break;
                 case SymbolKind.Property:
                     {
-                        fop_subject = ResolveParentExpression(si, pues.Operand, null, instructions);
+                        fop_subject = ResolveParentExpression(si, pues.Operand, null,null, instructions);
                         FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
 
                         FlatOperand fop_property;
@@ -2081,7 +2268,7 @@ namespace LS2IL
             if (node is BinaryExpressionSyntax)
             {
                 BinaryExpressionSyntax bes = (BinaryExpressionSyntax)node;
-                return ResolveExpression(bes, result_type, into_lvalue, instructions);
+                return ResolveExpression(bes, result_type, into_lvalue, null, instructions);
 
 
             }
@@ -2150,7 +2337,12 @@ namespace LS2IL
                 }
                 return ThisObject;
             }
-            throw new NotImplementedException();
+            if (node is InitializerExpressionSyntax)
+            {
+                InitializerExpressionSyntax ces = (InitializerExpressionSyntax)node;
+                return Resolve(ces, result_type, into_lvalue, instructions);
+            }
+            throw new NotImplementedException(node.GetType().ToString());
         }
 
         public void Flatten(BlockSyntax node, List<FlatStatement> instructions)
