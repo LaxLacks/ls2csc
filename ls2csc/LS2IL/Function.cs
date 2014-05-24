@@ -1316,7 +1316,7 @@ namespace LS2IL
                         IPropertySymbol ps = (IPropertySymbol)si.Symbol;
                         if (ps.IsStatic)
                         {
-                            throw new NotImplementedException("static indexer?");
+                            throw new NotSupportedException("static indexer?");
                         }
 
                         IMethodSymbol ms = ps.GetMethod;
@@ -2428,20 +2428,47 @@ namespace LS2IL
                     {
                         fop_subject = ResolveExpression(node.Left, null, instructions);
 
+                        if (((IParameterSymbol)si.Symbol).RefKind == RefKind.None)
+                        {
+                            if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
+                            {
+                                if (into_lvalue == null)
+                                {
+                                    return ResolveExpression(node.Right, fop_subject.GetLValue(this, instructions), instructions);
+                                }
 
+                                FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
+                                instructions.Add(FlatStatement.REFERENCE(fop_subject.GetLValue(this, instructions), fop_right));
+                                return fop_right;
+                            }
+                            else
+                            {
+                                FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
+                                ResolveBinaryExpression(node.CSharpKind(), fop_subject, fop_right, fop_subject.GetLValue(this, instructions), instructions);
+                                return fop_subject;
+                            }
+                        }
+
+                        // reference
                         if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
                         {
                             FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
-//                            instructions.Add(FlatStatement.REFERENCE(fop_subject.GetLValue(this, instructions), fop_right));
 
                             instructions.Add(FlatStatement.REREFERENCE(fop_subject, fop_right));
-                            // instructions.Add(FlatStatement.REREFERENCE(FlatOperand.InputRef(0, FlatValue.Null()),fop_return));
                             return fop_right;
                         }
                         else
                         {
                             FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
-                            ResolveBinaryExpression(node.CSharpKind(), fop_subject, fop_right, fop_subject, instructions);
+
+                            FlatOperand fop_duplicate = AllocateRegister("local_"+fop_subject.ToString());
+                            FlatOperand lvalue_final = fop_duplicate.GetLValue(this, instructions);
+
+                            instructions.Add(FlatStatement.DEREFERENCE(lvalue_final, fop_subject));
+
+                            ResolveBinaryExpression(node.CSharpKind(), fop_duplicate , fop_right, lvalue_final, instructions);
+
+                            instructions.Add(FlatStatement.REREFERENCE(fop_subject, fop_duplicate));
                             return fop_subject;
                         }
                     }
