@@ -247,4 +247,9 @@ namespace System
         public static sbyte Abs(sbyte value);
         public static short Abs(short value);
     }
+
+    public class Type : LavishScript2.Type
+    {
+
+    }
 }

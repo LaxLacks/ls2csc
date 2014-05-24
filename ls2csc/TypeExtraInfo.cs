@@ -156,7 +156,83 @@ namespace LS2IL
             {
                 if (IsLibrary)
                     return;
-                throw new NotImplementedException("indexer");
+
+                ISymbol s = Model.GetDeclaredSymbol(node);
+                Function fGet = null;
+                Function fSet = null;
+
+                string sGet = string.Empty;
+                string sSet = string.Empty;
+                IMethodSymbol msGet = null;
+                IMethodSymbol msSet = null;
+                foreach (AccessorDeclarationSyntax ads in node.AccessorList.Accessors)
+                {
+                    switch (ads.Keyword.CSharpKind())
+                    {
+                        case SyntaxKind.GetKeyword:
+                            {
+                                msGet = Model.GetDeclaredSymbol(ads);
+                                if (!Chunk.Functions.TryGetValue(msGet, out fGet))
+                                {
+                                    throw new NotImplementedException("Method not found " + msGet.ToString());
+                                }
+                                sGet = /*"get_" +*/ msGet.GetFullyQualifiedName();
+                            }
+                            break;
+                        case SyntaxKind.SetKeyword:
+                            {
+                                msSet = Model.GetDeclaredSymbol(ads);
+                                if (!Chunk.Functions.TryGetValue(msSet, out fSet))
+                                {
+                                    throw new NotImplementedException("Method not found " + msSet.ToString());
+                                }
+                                sSet = /*"set_" +*/ msSet.GetFullyQualifiedName();
+                            }
+                            break;
+                        default:
+                            throw new NotImplementedException("unhandled property accessor: " + ads.Keyword.CSharpKind().ToString());
+                            break;
+                    }
+                }
+
+                if (msGet != null)
+                {
+                    FlatArrayBuilder fab = new FlatArrayBuilder();
+                    fab.Add(FlatValue.Int32(s.IsStatic ? (int)ClassMemberType.StaticMethod : (int)ClassMemberType.Method));
+
+
+                    fab.Add(FlatValue.String(sGet));
+                    Function f;
+                    if (!Chunk.Functions.TryGetValue(msGet, out f))
+                    {
+                        throw new NotImplementedException("Method not found " + msGet.ToString());
+                    }
+
+                    fab.Add(FlatValue.Int32(f.NumFunction));
+
+                    fab.Add(GenerateInputDeclarations(msGet).GetFlatValue());
+
+                    Members.Add(fab.GetFlatValue());
+                }
+                if (msSet != null)
+                {
+                    FlatArrayBuilder fab = new FlatArrayBuilder();
+                    fab.Add(FlatValue.Int32(s.IsStatic ? (int)ClassMemberType.StaticMethod : (int)ClassMemberType.Method));
+
+
+                    fab.Add(FlatValue.String(sSet));
+                    Function f;
+                    if (!Chunk.Functions.TryGetValue(msSet, out f))
+                    {
+                        throw new NotImplementedException("Method not found " + msGet.ToString());
+                    }
+
+                    fab.Add(FlatValue.Int32(f.NumFunction));
+
+                    fab.Add(GenerateInputDeclarations(msSet).GetFlatValue());
+
+                    Members.Add(fab.GetFlatValue());
+                }
             }
 
             public void Add(EnumMemberDeclarationSyntax node)

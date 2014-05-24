@@ -80,8 +80,30 @@ namespace LS2IL
 
         public void AddFunction(IndexerDeclarationSyntax node, SemanticModel Model)
         {
-            IPropertySymbol ms = Model.GetDeclaredSymbol(node);
-            throw new NotImplementedException("indexer");
+            IPropertySymbol ps = Model.GetDeclaredSymbol(node);
+            foreach(AccessorDeclarationSyntax ads in node.AccessorList.Accessors)
+            {
+                IMethodSymbol ms = Model.GetDeclaredSymbol(ads);
+                AddFunction(ms, Model);
+            }
+
+            /*
+            Function f;
+            if (Indexers.TryGetValue(ms, out f))
+            {
+                return;
+            }
+            int nFunction = FunctionsByNumber.Count;
+            f = new Function(this, nFunction, Model, ms);
+            Functions.Add(f.IMethodSymbol, f);
+            FunctionsByNumber.Add(f);
+
+            if (ms.IsImplicitlyDeclared)
+            {
+                TypeExtraInfo tei = AddTypeExtraInfo(ms.ContainingType, Model, false); // assuming isLibrary=false because we have a function representing it in the chunk.
+                tei.MetadataGenerator.Add(ms);
+            }
+            /**/
         }
 
         public void AddFunction(MethodDeclarationSyntax node, SemanticModel Model)

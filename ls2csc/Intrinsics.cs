@@ -14,7 +14,14 @@ namespace ls2csc
     {
         public abstract bool IsStatic { get; }
 
-        public abstract FlatOperand Resolve(InvocationExpressionSyntax node, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions);
+        /*
+        public virtual FlatOperand Resolve(InvocationExpressionSyntax node, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
+        {
+            return Resolve(node.Expression, node.ArgumentList, result_type, si, into_lvalue, function, instructions);
+        }
+        /**/
+
+        public abstract FlatOperand Resolve(ExpressionSyntax expression, ArgumentListSyntax argumentList, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions);
     }
 
     abstract class IntrinsicProperty
@@ -102,14 +109,15 @@ namespace ls2csc
             get { return false; }
         }
 
-        public override FlatOperand Resolve(InvocationExpressionSyntax node, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
+
+        public override FlatOperand Resolve(ExpressionSyntax expression, ArgumentListSyntax argumentList, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
         {
-            if (!(node.Expression is MemberAccessExpressionSyntax))
+            if (!(expression is MemberAccessExpressionSyntax))
             {
                 throw new NotImplementedException("GetType not on MemberAccessExpressionSyntax");
             }
 
-            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)node.Expression;
+            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
 
 
             FlatOperand fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
@@ -121,9 +129,8 @@ namespace ls2csc
             }
             instructions.Add(FlatStatement.TYPEOF(into_lvalue, fop_subject));
             return into_lvalue.AsRValue(FlatValue.Type(si.Symbol.ContainingType));
-
-
         }
+
     }
 
     class IntrinsicMethod_ToString : IntrinsicMethod
@@ -134,14 +141,14 @@ namespace ls2csc
             get { return false; }
         }
 
-        public override FlatOperand Resolve(InvocationExpressionSyntax node, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
+        public override FlatOperand Resolve(ExpressionSyntax expression, ArgumentListSyntax argumentList, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
         {
-            if (!(node.Expression is MemberAccessExpressionSyntax))
+            if (!(expression is MemberAccessExpressionSyntax))
             {
                 throw new NotImplementedException("ToString not on MemberAccessExpressionSyntax");
             }
 
-            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)node.Expression;
+            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
 
 
             FlatOperand fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
@@ -153,9 +160,8 @@ namespace ls2csc
             }
             instructions.Add(FlatStatement.STRINGVAL(into_lvalue, fop_subject));
             return into_lvalue.AsRValue(FlatValue.String(string.Empty));
-
-
         }
+
     }
 
     class IntrinsicMethod_GetMetaTable : IntrinsicMethod
@@ -166,14 +172,14 @@ namespace ls2csc
             get { return false; }
         }
 
-        public override FlatOperand Resolve(InvocationExpressionSyntax node, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
+        public override FlatOperand Resolve(ExpressionSyntax expression, ArgumentListSyntax argumentList, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
         {
-            if (!(node.Expression is MemberAccessExpressionSyntax))
+            if (!(expression is MemberAccessExpressionSyntax))
             {
                 throw new NotImplementedException("GetMetaTable not on MemberAccessExpressionSyntax");
             }
 
-            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)node.Expression;
+            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
 
 
             FlatOperand fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
@@ -185,8 +191,6 @@ namespace ls2csc
             }
             instructions.Add(FlatStatement.GETMETATABLE(into_lvalue, fop_subject));
             return into_lvalue.AsRValue(FlatValue.Table());
-
-
         }
     }
 }

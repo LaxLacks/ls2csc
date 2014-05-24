@@ -382,10 +382,12 @@ namespace ls2csctest
                     foreach (SyntaxTree tree in referenceTrees)
                     {
 
-                        SyntaxNode root = tree.GetRoot();
-                        root = new EnumValueRewriter().Visit(root);
-                        root = new AutoImplementedPropertyRewriter().Visit(root);
-                        finalReferenceTrees.Add((CSharpSyntaxTree.Create((CSharpSyntaxNode)root)));
+                        SyntaxNode newRoot = tree.GetRoot();
+                        SemanticModel model = compilation.GetSemanticModel(tree);
+                        newRoot = new IndexerRewriter(model).Visit(newRoot);
+                        newRoot = new EnumValueRewriter().Visit(newRoot);
+                        newRoot = new AutoImplementedPropertyRewriter().Visit(newRoot);
+                        finalReferenceTrees.Add((CSharpSyntaxTree.Create((CSharpSyntaxNode)newRoot)));
                     }
                     referenceTrees = finalReferenceTrees;
                 }
@@ -397,6 +399,7 @@ namespace ls2csctest
                     SyntaxNode newRoot = tree.GetRoot();
                     SemanticModel model = compilation.GetSemanticModel(tree);
 
+                    newRoot = new IndexerRewriter(model).Visit(newRoot);
                     newRoot = new EnumValueRewriter().Visit(newRoot);
 #if SCRIPTING_API_REINTRODUCED
                     newRoot = new Optimizers.CondenseLiteralsRewriter().Visit(newRoot);

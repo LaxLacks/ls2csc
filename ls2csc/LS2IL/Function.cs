@@ -926,8 +926,29 @@ namespace LS2IL
             return fop_array;
         }
 
-        public FlatOperand ResolveArgumentsToArray(ArgumentListSyntax args, FlatOperand return_reference, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        public class ReferencedArgument
         {
+            public ReferencedArgument(FlatOperand fopOriginalRegister, FlatOperand fopReference)
+            {
+                fop_OriginalRegister = fopOriginalRegister;
+                fop_Reference = fopReference;
+            }
+
+            public FlatOperand fop_OriginalRegister {get;set;}
+            public FlatOperand fop_Reference {get;set;}
+        }
+
+        public void DereferenceArgumentsAfterCall(List<ReferencedArgument> args, List<FlatStatement> instructions)
+        {
+            foreach(ReferencedArgument arg in args)
+            {
+                instructions.Add(FlatStatement.DEREFERENCE(arg.fop_OriginalRegister.GetLValue(this, instructions),arg.fop_Reference));
+            }
+        }
+
+        public FlatOperand ResolveArgumentsToArray(ArgumentListSyntax args, FlatOperand return_reference, FlatOperand into_lvalue, out List<ReferencedArgument> referencedArgs, List<FlatStatement> instructions)
+        {
+            referencedArgs = new List<ReferencedArgument>();
             if (into_lvalue == null)
             {
                 FlatOperand register_fop = AllocateRegister("");
@@ -1020,7 +1041,18 @@ namespace LS2IL
                         //     SyntaxToken representing the optional ref or out keyword.
                         public SyntaxToken RefOrOutKeyword { get; }
                 /**/
+
                 FlatOperand fop_element = ResolveExpression(ars.Expression, null, instructions);
+
+                if (ars.RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                {
+                    FlatOperand register_fop = AllocateRegister("");
+                    instructions.Add(FlatStatement.REREFERENCE(register_fop.GetLValue(this, instructions), fop_element));
+                    referencedArgs.Add(new ReferencedArgument(fop_element,register_fop));
+                    fop_element = register_fop;
+                    //throw new NotImplementedException("ref/out keywords");
+                }
+
                 instructions.Add(FlatStatement.ADD(into_lvalue,fop_array,fop_element));
             }
 
@@ -1165,11 +1197,15 @@ namespace LS2IL
             }
 
             FlatOperand fop_constructor = Resolve((IMethodSymbol)si.Symbol,fop_type,null,instructions);
-            
-            FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList,null,null, instructions);
+
+            List<ReferencedArgument> references = null;
+            FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList,null,null, out references, instructions);
+
+
 
             instructions.Add(FlatStatement.NEWOBJECT(into_lvalue, fop_constructor, fop_args));
 
+            DereferenceArgumentsAfterCall(references, instructions);
 
             FlatOperand fop_rvalue = into_lvalue.AsRValue(FlatValue.FromType(ti.ConvertedType));
 
@@ -1201,6 +1237,11 @@ namespace LS2IL
             return fop_rvalue;
         }
 
+        public ImmutableArray<IMethodSymbol> GetPropertyMethods(ImmutableArray<IPropertySymbol> properties)
+        {
+            return ImmutableArray<IMethodSymbol>.Empty;
+        }
+
         public FlatOperand Resolve(ElementAccessExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             /*
@@ -1218,12 +1259,11 @@ namespace LS2IL
             //SymbolInfo si = Model.GetSymbolInfo(node.Expression);
             TypeInfo ti = Model.GetTypeInfo(node.Expression);
 
-            FlatOperand fop_array = ResolveExpression(node.Expression, null, instructions);
-
             switch (ti.ConvertedType.TypeKind)
             {
                 case TypeKind.ArrayType:
                     {
+                        FlatOperand fop_array = ResolveExpression(node.Expression, null, instructions);
                         // resolve the array index
                         List<FlatOperand> args = ResolveArguments(node.ArgumentList, instructions);
                         FlatOperand key = ArrayIndexFrom(args, instructions);
@@ -1245,6 +1285,8 @@ namespace LS2IL
 
                         if (ti.ConvertedType.GetFullyQualifiedName() == "LavishScript2.Table")
                         {
+                            FlatOperand fop_table = ResolveExpression(node.Expression, null, instructions);
+
                             /*
                             List<FlatOperand> args = ResolveArguments(node.ArgumentList, instructions);
                             FlatOperand key = ArrayIndexFrom(args, instructions);
@@ -1260,9 +1302,49 @@ namespace LS2IL
 
 
 
-                            instructions.Add(FlatStatement.TABLEGET(into_lvalue, fop_array, key));
+                            instructions.Add(FlatStatement.TABLEGET(into_lvalue, fop_table, key));
                             return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                         }
+
+                        
+                        SymbolInfo si = Model.GetSymbolInfo(node);
+                        if (si.Symbol.Kind != SymbolKind.Property)
+                        {
+                            throw new NotImplementedException("element access on type " + ti.ConvertedType.GetFullyQualifiedName() + " resolves to " + si.Symbol.Kind.ToString());
+                        }
+
+                        IPropertySymbol ps = (IPropertySymbol)si.Symbol;
+                        if (ps.IsStatic)
+                        {
+                            throw new NotImplementedException("static indexer?");
+                        }
+
+                        IMethodSymbol ms = ps.GetMethod;
+                        if (ms == null)
+                        {
+                            throw new NotImplementedException(ps.Name+" indexer has no get method?");
+                        }
+
+                        
+                        /*
+                        if (into_lvalue == null)
+                        {
+                            FlatOperand register_fop = AllocateRegister("");
+                            into_lvalue = register_fop.GetLValue(this, instructions);
+                        }
+                        /**/
+
+                        //instructions.Add(FlatStatement.RESOLVEMETHOD());
+                        //Resolve(IMethodSymbol method, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+                        FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
+                        FlatOperand fop_method = Resolve(ms, fop_type, null, instructions);
+
+                        return Resolve(si,ms,node.Expression,SyntaxFactory.ArgumentList(node.ArgumentList.Arguments),result_type,into_lvalue,instructions);
+
+                        /*
+                        instructions.Add(FlatStatement.TABLEGET(into_lvalue, fop_array, key));
+                        return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                        /**/
 
                         throw new NotImplementedException("element access on type " + ti.ConvertedType.GetFullyQualifiedName());
                     }
@@ -1426,6 +1508,286 @@ namespace LS2IL
 
         }
 
+        public FlatOperand Resolve(SymbolInfo si, IMethodSymbol method, ExpressionSyntax expression, ArgumentListSyntax args, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            // check for intrinsics
+
+            string intrinsic;
+            if (method.GetIntrinsic(out intrinsic))
+            {
+                var im = ls2csc.Intrinsics.ResolveMethod(intrinsic);
+                if (im == null)
+                {
+                    throw new NotImplementedException("Unhandled intrinsic method " + intrinsic);
+                }
+                return im.Resolve(expression, args, result_type, si, into_lvalue, this, instructions);
+            }
+
+            int nArgs = args.Arguments.Count;
+            //int nFirstArg = 0;
+            if (!method.ReturnsVoid)
+            {
+                nArgs++;
+                //nFirstArg = 1;
+            }
+
+            if (method.IsStatic)
+            {
+                FlatOperand fop_type = Resolve(method.ContainingType, null, instructions);
+                FlatOperand fop_method = Resolve(method, fop_type, null, instructions);
+                // 1. RESOLVETYPE               
+
+                switch (nArgs)
+                {
+                    case 0:
+                        {
+                            instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method));
+                            return FlatOperand.LiteralNull();
+                        }
+                        break;
+                    case 1:
+                        {
+                            if (!method.ReturnsVoid)
+                            {
+                                FlatOperand fop_return = AllocateRegister("");
+
+                                FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
+                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, fop_return));
+                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
+
+                                if (into_lvalue == null)
+                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
+                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
+                            }
+
+                            FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
+                            FlatOperand input0_use = input0_fop;
+                            FlatOperand input0_reference = null;
+
+                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                            {
+                                input0_reference = AllocateRegister("");
+                                instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
+                                input0_use = input0_reference;
+                            }
+                            instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, input0_use));
+                            if (input0_reference != null)
+                                instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
+                            return FlatOperand.LiteralNull();
+                        }
+                        break;
+                    case 2:
+                        {
+                            if (!method.ReturnsVoid)
+                            {
+                                FlatOperand fop_return = AllocateRegister("");
+
+                                FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
+
+                                FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
+                                FlatOperand input0_use = input0_fop;
+                                FlatOperand input0_reference = null;
+
+                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                                {
+                                    input0_reference = AllocateRegister("");
+                                    instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
+                                    input0_use = input0_reference;
+                                }
+
+                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, fop_return, input0_use));
+                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
+
+                                if (into_lvalue == null)
+                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
+                                if (input0_reference != null)
+                                    instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
+                                
+                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
+                            }
+                            {
+                                FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
+                                FlatOperand input0_use = input0_fop;
+                                FlatOperand input0_reference = null;
+
+                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                                {
+                                    input0_reference = AllocateRegister("");
+                                    instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
+                                    input0_use = input0_reference;
+                                }
+
+                                FlatOperand input1_fop = ResolveExpression(args.Arguments[1].Expression, null, instructions);
+                                FlatOperand input1_use = input1_fop;
+                                FlatOperand input1_reference = null;
+
+                                if (args.Arguments[1].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                                {
+                                    input1_reference = AllocateRegister("");
+                                    instructions.Add(FlatStatement.REREFERENCE(input1_reference.GetLValue(this, instructions), input1_fop));
+                                    input1_use = input1_reference;
+                                }
+                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, input0_use, input1_use));
+
+                                if (input0_reference != null)
+                                    instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
+                                if (input1_reference != null)
+                                    instructions.Add(FlatStatement.DEREFERENCE(input1_fop.GetLValue(this, instructions), input1_reference));
+                                return FlatOperand.LiteralNull();
+                            }
+                        }
+                        break;
+                    default:
+                        {
+
+                            if (!method.ReturnsVoid)
+                            {
+                                FlatOperand fop_return = AllocateRegister("");
+
+                                FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
+
+                                List<ReferencedArgument> references = null;
+                                FlatOperand fop_args = ResolveArgumentsToArray(args, fop_return, null, out references, instructions);
+
+                                instructions.Add(FlatStatement.CALLSTATICMETHOD(fop_method, fop_args));
+                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
+
+                                if (into_lvalue == null)
+                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
+                                DereferenceArgumentsAfterCall(references, instructions);
+                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
+                            }
+                            /**/
+
+                            {
+                                List<ReferencedArgument> references = null;
+                                FlatOperand fop_args = ResolveArgumentsToArray(args, null, null, out references, instructions);
+                                {
+                                    instructions.Add(FlatStatement.CALLSTATICMETHOD(fop_method, fop_args));
+                                    DereferenceArgumentsAfterCall(references, instructions);
+                                    return FlatOperand.LiteralNull();
+                                }
+                            }
+                        }
+                        break;
+                }
+
+            }
+
+            FlatOperand fop_subject;
+            if (expression is MemberAccessExpressionSyntax)
+            {
+                MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
+                fop_subject = ResolveExpression(meas.Expression, null, instructions);
+            }
+            else
+            {
+                // implied "this"
+                fop_subject = FlatOperand.ThisRef(FlatValue.FromType(method.ContainingType));
+            }
+
+            {
+
+
+
+                FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
+
+                FlatOperand fop_method = Resolve(method, fop_type, null, instructions);
+
+                // non-static method            
+                // 1. RESOLVETYPE               
+                // FASTCALL
+                switch (nArgs)
+                {
+                    case 0:
+                        {
+                            instructions.Add(FlatStatement.FASTCALLMETHOD(fop_method, fop_subject));
+                            return FlatOperand.LiteralNull();
+                        }
+                        break;
+                    case 1:
+                        {
+                            if (!method.ReturnsVoid)
+                            {
+                                FlatOperand fop_return = AllocateRegister("");
+
+                                FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
+                                instructions.Add(FlatStatement.FASTCALLMETHOD(fop_method, fop_subject, fop_return));
+                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
+
+                                if (into_lvalue == null)
+                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
+                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
+                            }
+
+                            FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
+                            FlatOperand input0_use = input0_fop;
+                            FlatOperand input0_reference = null;
+
+                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                            {
+                                input0_reference = AllocateRegister("");
+                                instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
+                                input0_use = input0_reference;
+                            }
+                            instructions.Add(FlatStatement.FASTCALLMETHOD(fop_method, fop_subject, input0_use));
+
+                            if (input0_reference != null)
+                                instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
+                            return FlatOperand.LiteralNull();
+                        }
+                        break;
+                    default:
+                        {
+
+                            if (!method.ReturnsVoid)
+                            {
+                                FlatOperand fop_return = AllocateRegister("");
+
+                                FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
+
+                                List<ReferencedArgument> references = null;
+                                FlatOperand fop_args = ResolveArgumentsToArray(args, fop_return, null, out references, instructions);
+
+                                instructions.Add(FlatStatement.CALLMETHOD(fop_method, fop_subject, fop_args));
+                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
+
+                                if (into_lvalue == null)
+                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
+                                DereferenceArgumentsAfterCall(references, instructions);
+                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
+                            }
+                            /**/
+
+                            {
+                                List<ReferencedArgument> references = null;
+                                FlatOperand fop_args = ResolveArgumentsToArray(args, null, null, out references, instructions);
+                                {
+                                    instructions.Add(FlatStatement.CALLMETHOD(fop_method, fop_subject, fop_args));
+                                    DereferenceArgumentsAfterCall(references, instructions);
+                                    return FlatOperand.LiteralNull();
+                                }
+                            }
+                        }
+
+                        break;
+                }
+            }
+            /**/
+
+            throw new NotImplementedException();
+        }
+
         public FlatOperand Resolve(InvocationExpressionSyntax node, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             SymbolInfo si = Model.GetSymbolInfo(node);
@@ -1440,6 +1802,8 @@ namespace LS2IL
             }
 
             IMethodSymbol method = (IMethodSymbol)si.Symbol;
+            return Resolve(si,method, node.Expression, node.ArgumentList, result_type, into_lvalue, instructions);
+
             // check for intrinsics
             
             string intrinsic;
@@ -1450,7 +1814,7 @@ namespace LS2IL
                 {
                     throw new NotImplementedException("Unhandled intrinsic method "+intrinsic);
                 }
-                return im.Resolve(node,result_type,si,into_lvalue,this,instructions);
+                return im.Resolve(node.Expression,node.ArgumentList,result_type,si,into_lvalue,this,instructions);
             }
             
 
@@ -1497,10 +1861,21 @@ namespace LS2IL
                                 return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
                             }
 
-                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                                throw new NotImplementedException("ref or out keyword on " + args.Arguments[0].ToString());
+
                             FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
-                            instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, input0_fop));
+                            FlatOperand input0_use = input0_fop;
+                            FlatOperand input0_reference = null;
+
+                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                            {
+                                input0_reference = AllocateRegister("");
+                                instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
+                                input0_use = input0_reference;
+                            }
+
+                            instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, input0_use));
+                            if (input0_reference != null)
+                                instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
                             return FlatOperand.LiteralNull();
                         }
                         break;
@@ -1513,26 +1888,55 @@ namespace LS2IL
                                 FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
                                 instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
 
-                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                                    throw new NotImplementedException("ref or out keyword on " + args.Arguments[0].ToString());
                                 FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
+                                FlatOperand input0_use = input0_fop;
+                                FlatOperand input0_reference = null;
 
-                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, fop_return, input0_fop));
+                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                                {
+                                    input0_reference = AllocateRegister("");
+                                    instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
+                                    input0_use = input0_reference;
+                                }
+                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, fop_return, input0_use));
                                 FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
 
                                 if (into_lvalue == null)
                                     into_lvalue = AllocateRegister("").GetLValue(this, instructions);
                                 instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
+                                if (input0_reference != null)
+                                    instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
                                 return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
                             }
                             {
-                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                                    throw new NotImplementedException("ref or out keyword on " + args.Arguments[0].ToString());
-                                if (args.Arguments[1].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                                    throw new NotImplementedException("ref or out keyword on " + args.Arguments[1].ToString());
                                 FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
+                                FlatOperand input0_use = input0_fop;
+                                FlatOperand input0_reference = null;
+
+                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                                {
+                                    input0_reference = AllocateRegister("");
+                                    instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
+                                    input0_use = input0_reference;
+                                }
+
                                 FlatOperand input1_fop = ResolveExpression(args.Arguments[1].Expression, null, instructions);
-                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, input0_fop, input1_fop));
+                                FlatOperand input1_use = input1_fop;
+                                FlatOperand input1_reference = null;
+
+                                if (args.Arguments[1].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                                {
+                                    input1_reference = AllocateRegister("");
+                                    instructions.Add(FlatStatement.REREFERENCE(input1_reference.GetLValue(this, instructions), input1_fop));
+                                    input1_use = input1_reference;
+                                }
+                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, input0_use, input1_use));
+
+                                if (input0_reference != null)
+                                    instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
+                                if (input1_reference != null)
+                                    instructions.Add(FlatStatement.DEREFERENCE(input1_fop.GetLValue(this, instructions), input1_reference));
+                                
                                 return FlatOperand.LiteralNull();
                             }
                         }
@@ -1547,7 +1951,8 @@ namespace LS2IL
                                 FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
                                 instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
 
-                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, fop_return, null, instructions);
+                                List<ReferencedArgument> references = null;
+                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, fop_return, null, out references,instructions);
 
                                 instructions.Add(FlatStatement.CALLSTATICMETHOD(fop_method, fop_args));
                                 FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
@@ -1555,14 +1960,17 @@ namespace LS2IL
                                 if (into_lvalue == null)
                                     into_lvalue = AllocateRegister("").GetLValue(this, instructions);
                                 instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
+                                DereferenceArgumentsAfterCall(references, instructions);
                                 return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
                             }
                             /**/
 
                             {
-                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, null, null, instructions);
+                                List<ReferencedArgument> references = null;
+                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, null, null, out references, instructions);
                                 {
                                     instructions.Add(FlatStatement.CALLSTATICMETHOD(fop_method, fop_args));
+                                    DereferenceArgumentsAfterCall(references, instructions);
                                     return FlatOperand.LiteralNull();
                                 }
                             }
@@ -1620,10 +2028,22 @@ namespace LS2IL
                                 return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
                             }
 
-                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                                throw new NotImplementedException("ref or out keyword on " + args.Arguments[0].ToString());
                             FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
-                            instructions.Add(FlatStatement.FASTCALLMETHOD(fop_method, fop_subject, input0_fop));
+                            FlatOperand input0_use = input0_fop;
+                            FlatOperand input0_reference = null;
+
+                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
+                            {
+                                input0_reference = AllocateRegister("");
+                                instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
+                                input0_use = input0_reference;
+                            }
+
+                            instructions.Add(FlatStatement.FASTCALLMETHOD(fop_method, fop_subject, input0_use));
+
+                            if (input0_reference!=null)
+                                instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
+
                             return FlatOperand.LiteralNull();
                         }
                         break;
@@ -1637,7 +2057,8 @@ namespace LS2IL
                                 FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
                                 instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
 
-                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, fop_return, null, instructions);
+                                List<ReferencedArgument> references = null;
+                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, fop_return, null, out references, instructions);
 
                                 instructions.Add(FlatStatement.CALLMETHOD(fop_method, fop_subject, fop_args));
                                 FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
@@ -1645,14 +2066,17 @@ namespace LS2IL
                                 if (into_lvalue == null)
                                     into_lvalue = AllocateRegister("").GetLValue(this, instructions);
                                 instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
+                                DereferenceArgumentsAfterCall(references, instructions);
                                 return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
                             }
                             /**/
 
                             {
-                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, null, null, instructions);
+                                List<ReferencedArgument> references = null;
+                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, null, null,out references, instructions);
                                 {
                                     instructions.Add(FlatStatement.CALLMETHOD(fop_method, fop_subject, fop_args));
+                                    DereferenceArgumentsAfterCall(references, instructions);
                                     return FlatOperand.LiteralNull();
                                 }
                             }
@@ -2002,7 +2426,24 @@ namespace LS2IL
                     break;
                 case SymbolKind.Parameter:
                     {
+                        fop_subject = ResolveExpression(node.Left, null, instructions);
 
+
+                        if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
+                        {
+                            FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
+//                            instructions.Add(FlatStatement.REFERENCE(fop_subject.GetLValue(this, instructions), fop_right));
+
+                            instructions.Add(FlatStatement.REREFERENCE(fop_subject, fop_right));
+                            // instructions.Add(FlatStatement.REREFERENCE(FlatOperand.InputRef(0, FlatValue.Null()),fop_return));
+                            return fop_right;
+                        }
+                        else
+                        {
+                            FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
+                            ResolveBinaryExpression(node.CSharpKind(), fop_subject, fop_right, fop_subject, instructions);
+                            return fop_subject;
+                        }
                     }
                     break;
             }
