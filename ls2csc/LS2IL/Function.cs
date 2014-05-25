@@ -528,6 +528,55 @@ namespace LS2IL
             throw new NotImplementedException(si.Symbol.Kind.ToString());
         }
 
+        public FlatOperand ResolveParameter(ExpressionSyntax expression, FlatOperand into_lvalue, out int numParam, List<FlatStatement> instructions)
+        {
+            if (!(expression is IdentifierNameSyntax))
+            {
+                throw new NotImplementedException("Parameter access that isn't an Identifier?");
+
+            }
+            IdentifierNameSyntax ins = (IdentifierNameSyntax)expression;
+
+            SymbolInfo si = Model.GetSymbolInfo(expression);
+
+            string name = ins.Identifier.ToString();
+
+            int nParameter = 0;
+            if (!IMethodSymbol.ReturnsVoid)
+                nParameter++;
+
+            foreach (IParameterSymbol ps in IMethodSymbol.Parameters)
+            {
+                if (name == ps.Name)
+                {
+                    numParam = nParameter; 
+                    FlatValue retval = FlatValue.FromType(ps.Type);
+                    FlatOperand fop_input = FlatOperand.InputRef(nParameter, retval);
+
+                    if (ps.RefKind != RefKind.None)
+                    {
+                        if (into_lvalue == null)
+                        {
+                            FlatOperand register_fop = AllocateRegister("");
+                            into_lvalue = register_fop.GetLValue(this, instructions);
+                        }
+                        instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, fop_input));
+                        
+                        return into_lvalue.AsRValue(retval);
+                    }
+
+                    if (into_lvalue != null)
+                    {
+                        instructions.Add(FlatStatement.REFERENCE(into_lvalue, fop_input));
+                    }
+                    return fop_input;
+                }
+                nParameter++;
+            }
+
+            throw new NotImplementedException("parameter '" + name + "' not found");
+        }
+
         public FlatOperand Resolve(IdentifierNameSyntax ins, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
             SymbolInfo si = Model.GetSymbolInfo(ins);
@@ -576,6 +625,18 @@ namespace LS2IL
                             {
                                 FlatValue retval = FlatValue.FromType(ps.Type);
                                 FlatOperand fop_input = FlatOperand.InputRef(nParameter, retval);
+
+                                if (ps.RefKind != RefKind.None)
+                                {
+                                    if (into_lvalue == null)
+                                    {
+                                        FlatOperand register_fop = AllocateRegister("");
+                                        into_lvalue = register_fop.GetLValue(this, instructions);
+                                    }
+                                    instructions.Add(FlatStatement.DEREFERENCE(into_lvalue,fop_input));
+
+                                    return into_lvalue.AsRValue(retval);
+                                }
 
                                 if (into_lvalue!=null)
                                 {
@@ -2439,7 +2500,8 @@ namespace LS2IL
                     break;
                 case SymbolKind.Parameter:
                     {
-                        fop_subject = ResolveExpression(node.Left, null, instructions);
+                        int numParam = 0;
+                        fop_subject = ResolveParameter(node.Left, null, out numParam, instructions);
 
                         if (((IParameterSymbol)si.Symbol).RefKind == RefKind.None)
                         {
@@ -2467,21 +2529,24 @@ namespace LS2IL
                         {
                             FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
 
-                            instructions.Add(FlatStatement.REREFERENCE(fop_subject, fop_right));
+                            instructions.Add(FlatStatement.REREFERENCE(FlatOperand.InputRef(numParam,fop_subject.ImmediateValue), fop_right));
                             return fop_right;
                         }
                         else
                         {
                             FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
 
+                            /*
                             FlatOperand fop_duplicate = AllocateRegister("local_"+fop_subject.ToString());
                             FlatOperand lvalue_final = fop_duplicate.GetLValue(this, instructions);
 
                             instructions.Add(FlatStatement.DEREFERENCE(lvalue_final, fop_subject));
+                            /**/
+                            FlatOperand lvalue_final = fop_subject.GetLValue(this, instructions);
+                            ResolveBinaryExpression(node.CSharpKind(), fop_subject , fop_right, lvalue_final, instructions);
 
-                            ResolveBinaryExpression(node.CSharpKind(), fop_duplicate , fop_right, lvalue_final, instructions);
-
-                            instructions.Add(FlatStatement.REREFERENCE(fop_subject, fop_duplicate));
+//                            instructions.Add(FlatStatement.REREFERENCE(fop_subject, fop_duplicate));
+                            instructions.Add(FlatStatement.REREFERENCE(FlatOperand.InputRef(numParam, fop_subject.ImmediateValue), fop_right));
                             return fop_subject;
                         }
                     }
@@ -2551,8 +2616,24 @@ namespace LS2IL
                         }
                         else
                         {
-                            FlatOperand op = ResolveExpression(pues.Operand, null, instructions);
+                            int numParam = 0;
+                            FlatOperand fop_duplicate = ResolveParameter(pues.Operand, null, out numParam, instructions);
+                            FlatOperand new_lvalue = fop_duplicate.GetLValue(this, instructions);
 
+                            instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_duplicate));
+                            switch (pues.CSharpKind())
+                            {
+                                case SyntaxKind.PostIncrementExpression:
+                                    instructions.Add(FlatStatement.ADD(new_lvalue, fop_duplicate, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                    instructions.Add(FlatStatement.REREFERENCE(FlatOperand.InputRef(numParam,fop_duplicate.ImmediateValue), fop_duplicate));
+                                    return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                                case SyntaxKind.PostDecrementExpression:
+                                    instructions.Add(FlatStatement.SUB(new_lvalue, fop_duplicate, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                    instructions.Add(FlatStatement.REREFERENCE(FlatOperand.InputRef(numParam, fop_duplicate.ImmediateValue), fop_duplicate));
+                                    return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                            }
+
+                            /*
                             FlatOperand fop_duplicate = AllocateRegister("local_" + op.ToString());
                             FlatOperand new_lvalue = fop_duplicate.GetLValue(this, instructions);
 
@@ -2570,6 +2651,7 @@ namespace LS2IL
                                     instructions.Add(FlatStatement.REREFERENCE(op, fop_duplicate));
                                     return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                             }
+                             * */
                         }
 
                         // reference
@@ -3333,6 +3415,15 @@ namespace LS2IL
 
         #endregion
         #region Switches
+        public class SwitchContext
+        {
+            public string Prefix { get; set; }
+            public string DefaultCaseLabel { get; set; }
+            public string EndSwitchLabel { get; set; }
+        }
+
+        public SwitchContext CurrentSwitchContext { get; set; }
+
         public void FlattenSwitchAsBinaryConditions(SwitchStatementSyntax node, string prefix, string endSwitchLabel, string defaultCaseLabel, List<FlatStatement> instructions)
         {
             FlatOperand fop_subject = ResolveExpression(node.Expression, null, instructions);
@@ -3540,6 +3631,8 @@ namespace LS2IL
         /**/
             TypeInfo ti = Model.GetTypeInfo(node.Expression);
 
+            SwitchContext previousSwitchContext = CurrentSwitchContext;
+
             string switchPrefix = this.MakeUniqueLabelPrefix("switch");
 
             string beginSwitchLabel = switchPrefix + "begin"; 
@@ -3549,6 +3642,8 @@ namespace LS2IL
 
             instructions.Add(FlatStatement.LABEL(FlatOperand.LabelRef(beginSwitchLabel)));
             this.PushVariableScope(instructions);
+
+            CurrentSwitchContext = new SwitchContext() { DefaultCaseLabel = defaultCaseLabel, EndSwitchLabel = endSwitchLabel, Prefix = switchPrefix };
 
             switch (ti.ConvertedType.SpecialType)
             {
@@ -3570,6 +3665,7 @@ namespace LS2IL
             this.PopVariableScope(instructions);
             this.SetBreakLabel(wasBreak);
 
+            CurrentSwitchContext = previousSwitchContext;
         }
         #endregion
 
@@ -3611,13 +3707,24 @@ namespace LS2IL
             switch(node.CaseOrDefaultKeyword.CSharpKind())
             {
                 case SyntaxKind.DefaultKeyword:
+                    if (CurrentSwitchContext != null)
+                    {
+                        instructions.Add(FlatStatement.JMP(FlatOperand.LabelRef(CurrentSwitchContext.DefaultCaseLabel)));
+                        return;
+                    }
                     break;
                 case SyntaxKind.CaseKeyword:
+                    if (CurrentSwitchContext != null)
+                    {
+                        //prefix + "case[" + fop.ImmediateValue.ValueText+"]";
+                        instructions.Add(FlatStatement.JMP(FlatOperand.LabelRef(CurrentSwitchContext.Prefix+"case["+node.Expression.ToString()+"]")));
+                        return;
+                    }
                     break;
                 default:
                     break;
             }
-            throw new NotImplementedException("goto");
+            throw new NotImplementedException("goto " + node.CaseOrDefaultKeyword.CSharpKind());
         }
         public void Flatten(UsingStatementSyntax node, List<FlatStatement> instructions)
         {            

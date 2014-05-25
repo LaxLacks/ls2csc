@@ -807,7 +807,8 @@ namespace LS2IL
 
             foreach (BasicBlock bb in Successors)
             {
-                bb.RemovePredecessor(this);
+                if (bb!=null)
+                    bb.RemovePredecessor(this);
             }
         }
 
