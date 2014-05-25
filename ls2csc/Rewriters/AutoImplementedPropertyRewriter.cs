@@ -51,7 +51,7 @@ namespace ls2csc
                     {
                         SeparatedSyntaxList<VariableDeclaratorSyntax> variables = new SeparatedSyntaxList<VariableDeclaratorSyntax>();
                         variables = variables.Add(SyntaxFactory.VariableDeclarator("_" + prop.Identifier.ValueText));
-                        newMembers = newMembers.Add(SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(prop.Type, variables)));
+                        newMembers = newMembers.Add(SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(prop.Type, variables)).WithModifiers(prop.Modifiers));
                     }
 
                     newMembers = newMembers.Add(prop.WithAccessorList(prop.AccessorList.WithAccessors(newAccessors)));

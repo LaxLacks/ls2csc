@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Lavish Software, LLC")]
 [assembly: AssemblyProduct("ls2csc")]
-[assembly: AssemblyCopyright("Copyright © ls2csc developers  2012")]
+[assembly: AssemblyCopyright("Copyright © ls2csc developers  2014")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

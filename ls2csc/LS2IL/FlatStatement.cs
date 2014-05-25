@@ -126,9 +126,16 @@ namespace LS2IL
                     return "exception";
                 case FlatOperandType.OPND_THIS:
                     return "this";
+                case FlatOperandType.OPND_INPUTS:
+                    return "inputs";
             }
 
             throw new NotImplementedException("Operand type " + OperandType.ToString());
+        }
+
+        public static FlatOperand Inputs()
+        {
+            return new FlatOperand(FlatOperandType.OPND_INPUTS, new FlatValue(FlatValueType.VT_Array,"{ }",null));
         }
 
         public static FlatOperand FunctionValueRef(int nValue, FlatValue flatvalue)

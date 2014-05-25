@@ -333,7 +333,7 @@ namespace LS2IL
                     {
                         if (vds.ArgumentList != null)
                         {
-                            throw new NotImplementedException("array field");
+                            throw new NotImplementedException("VariableDeclaratorSyntax with ArgumentList");
                         }
                         varList.Add(FlatValue.String(vds.Identifier.ToString()));
                     }

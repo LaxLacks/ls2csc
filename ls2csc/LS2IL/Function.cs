@@ -2356,47 +2356,60 @@ namespace LS2IL
                     break;
                 case SymbolKind.Property:
                     {
-                        fop_subject = ResolveParentExpression(si, node.Left, null, parent_op, instructions);
-                        fop_type = TypeOf(fop_subject, null, null, instructions);
-
-                        FlatOperand fop_property;
-                        //ITypeSymbol typeSymbol;
-                            IPropertySymbol ps = (IPropertySymbol)si.Symbol;
+                        IPropertySymbol ps = (IPropertySymbol)si.Symbol;
+                        if (!ps.IsStatic)
                         {
-                            fop_property = Resolve(ps, fop_type, null, instructions);
-                        }
+                            fop_subject = ResolveParentExpression(si, node.Left, null, parent_op, instructions);
+                            fop_type = TypeOf(fop_subject, null, null, instructions);
 
-                        FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
-
-                        if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
-                        {
-                            fop_result = fop_right;
-                        }
-                        else
-                        {
-                            fop_result = AllocateRegister("");
-                            lvalue_result = fop_result.GetLValue(this, instructions);
-                            if (ps.IsStatic)
+                            FlatOperand fop_property;
                             {
-                                instructions.Add(FlatStatement.GETSTATICPROPERTY(lvalue_result, fop_property));
+                                fop_property = Resolve(ps, fop_type, null, instructions);
+                            }
+
+                            FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
+
+                            if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
+                            {
+                                fop_result = fop_right;
                             }
                             else
                             {
+                                fop_result = AllocateRegister("");
+                                lvalue_result = fop_result.GetLValue(this, instructions);
                                 instructions.Add(FlatStatement.GETPROPERTY(lvalue_result, fop_property, fop_subject));
+                                ResolveBinaryExpression(node.CSharpKind(), fop_result, fop_right, lvalue_result, instructions);
                             }
-                            ResolveBinaryExpression(node.CSharpKind(), fop_result, fop_right, lvalue_result, instructions);
-                        }
-
-
-
-                        if (ps.IsStatic)
-                        {
-                            instructions.Add(FlatStatement.SETSTATICPROPERTY(fop_property, fop_result));
+                            instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_result));
                         }
                         else
                         {
-                            instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_result));
+                            fop_subject = ResolveParentExpression(si, node.Left, null, parent_op, instructions);
+                            //fop_type = TypeOf(fop_subject, null, null, instructions);
+
+                            FlatOperand fop_property;
+                           
+                            {
+                                fop_property = Resolve(ps, fop_subject, null, instructions);
+                            }
+
+                            FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
+
+                            if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
+                            {
+                                fop_result = fop_right;
+                            }
+                            else
+                            {
+                                fop_result = AllocateRegister("");
+                                lvalue_result = fop_result.GetLValue(this, instructions);
+                                instructions.Add(FlatStatement.GETSTATICPROPERTY(lvalue_result, fop_property));
+                                ResolveBinaryExpression(node.CSharpKind(), fop_result, fop_right, lvalue_result, instructions);
+                            }
+
+                            instructions.Add(FlatStatement.SETSTATICPROPERTY(fop_property, fop_result));
                         }
+ 
                         return fop_result;
                     }
                     break;
@@ -2511,76 +2524,102 @@ namespace LS2IL
             FlatOperand fop_subject;
             switch (si.Symbol.Kind)
             {
-                /*
-            case SymbolKind.Field:
-                {
-                    // need the parent object for the field 
-                    fop_subject = ResolveParentExpression(si, pues.Operand, null, instructions);
+                case SymbolKind.Parameter:
+                    {
+                        IParameterSymbol ps = (IParameterSymbol)si.Symbol;
 
-                    ITypeSymbol typeSymbol;
-                    IFieldSymbol ps = (IFieldSymbol)si.Symbol;
+                        if (ps.RefKind == RefKind.None)
+                        {
+                            FlatOperand op = ResolveExpression(pues.Operand, null, instructions);
                         
-                    if (ps.IsStatic)
-                    {
-                        throw new NotImplementedException("static Field assignment");
+                            instructions.Add(FlatStatement.DUPLICATE(into_lvalue, op));
+
+                            FlatOperand new_lvalue = op.GetLValue(this,instructions);
+
+                            switch (pues.CSharpKind())
+                            {
+                                case SyntaxKind.PostIncrementExpression:
+                                    instructions.Add(FlatStatement.ADD(new_lvalue, op, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                    instructions.Add(FlatStatement.ARRAYSET(FlatOperand.Inputs(), FlatOperand.Immediate(FlatValue.Int32(op.OperandIndex)), new_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType))));
+                                    return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                                case SyntaxKind.PostDecrementExpression:
+                                    instructions.Add(FlatStatement.SUB(new_lvalue, op, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                    instructions.Add(FlatStatement.ARRAYSET(FlatOperand.Inputs(), FlatOperand.Immediate(FlatValue.Int32(op.OperandIndex)), new_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType))));
+                                    return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                            }
+
+                        }
+                        else
+                        {
+                            FlatOperand op = ResolveExpression(pues.Operand, null, instructions);
+
+                            FlatOperand fop_duplicate = AllocateRegister("local_" + op.ToString());
+                            FlatOperand new_lvalue = fop_duplicate.GetLValue(this, instructions);
+
+                            instructions.Add(FlatStatement.DEREFERENCE(new_lvalue, op));
+                            instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_duplicate));
+
+                            switch (pues.CSharpKind())
+                            {
+                                case SyntaxKind.PostIncrementExpression:
+                                    instructions.Add(FlatStatement.ADD(new_lvalue, fop_duplicate, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                    instructions.Add(FlatStatement.REREFERENCE(op, fop_duplicate));
+                                    return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                                case SyntaxKind.PostDecrementExpression:
+                                    instructions.Add(FlatStatement.SUB(new_lvalue, fop_duplicate, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                    instructions.Add(FlatStatement.REREFERENCE(op, fop_duplicate));
+                                    return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                            }
+                        }
+
+                        // reference
+                        /*
+                        if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
+                        {
+                            FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
+
+                            instructions.Add(FlatStatement.REREFERENCE(fop_subject, fop_right));
+                            return fop_right;
+                        }
+                        else
+                        {
+                            FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
+
+                            FlatOperand fop_duplicate = AllocateRegister("local_" + fop_subject.ToString());
+                            FlatOperand lvalue_final = fop_duplicate.GetLValue(this, instructions);
+
+                            instructions.Add(FlatStatement.DEREFERENCE(lvalue_final, fop_subject));
+
+                            ResolveBinaryExpression(node.CSharpKind(), fop_duplicate, fop_right, lvalue_final, instructions);
+
+                            instructions.Add(FlatStatement.REREFERENCE(fop_subject, fop_duplicate));
+                            return fop_subject;
+                        }
+                         */
                     }
-
-                    typeSymbol = ps.Type;
-                    int nField;
-                    if (!GetRuntimeFieldNumber(ps, out nField))
-                    {
-                        throw new NotImplementedException("missing field " + ps.ToDisplayString());
-                    }
-
-                    FlatOperand fop_fieldnum = FlatOperand.LiteralInteger(nField);
-
-                    FlatOperand fop_currentvalue = this.AllocateRegister("");
-                    FlatOperand fop_currentlvalue = fop_currentvalue.GetLValue(this, instructions);
-
-                    // DUPLICATE (to return) the current value of the field
-                    // then increment and SETFIELD
-                    instructions.Add(FlatStatement.GETFIELD(fop_currentlvalue, fop_subject, fop_fieldnum));
-
-                    instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
-
-                    switch (pues.CSharpKind())
-                    {
-                        case SyntaxKind.PostIncrementExpression:
-                            instructions.Add(FlatStatement.ADD(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int8(1))));
-                            break;
-                        case SyntaxKind.PostDecrementExpression:
-                            instructions.Add(FlatStatement.SUB(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int8(1))));
-                            break;
-                    }
-
-                    instructions.Add(FlatStatement.SETFIELD(fop_subject, fop_fieldnum, fop_currentvalue));
-                    return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
-                }
-                break;*/
+                    break;
                 case SymbolKind.Field:
                     {
-                        fop_subject = ResolveParentExpression(si, pues.Operand, null,null, instructions);
+                        IFieldSymbol fs = (IFieldSymbol)si.Symbol;
+                        fop_subject = ResolveParentExpression(si, pues.Operand, null, null, instructions);
                         //FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
                         FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
 
                         FlatOperand fop_Field;
                         ITypeSymbol typeSymbol;
                         {
-                            IFieldSymbol ps = (IFieldSymbol)si.Symbol;
 
-                            if (ps.IsStatic)
-                            {
-                                throw new NotImplementedException("static Field assignment");
-                            }
-
-                            typeSymbol = ps.Type;
-                            fop_Field = Resolve(ps, fop_type, null, instructions);
+                            typeSymbol = fs.Type;
+                            fop_Field = Resolve(fs, fop_type, null, instructions);
                         }
 
                         FlatOperand fop_currentvalue = this.AllocateRegister("");
                         FlatOperand fop_currentlvalue = fop_currentvalue.GetLValue(this, instructions);
 
-                        instructions.Add(FlatStatement.GETFIELD(fop_currentlvalue, fop_Field, fop_subject));
+                        if (fs.IsStatic)
+                            instructions.Add(FlatStatement.GETSTATICFIELD(fop_currentlvalue, fop_Field));
+                        else
+                            instructions.Add(FlatStatement.GETFIELD(fop_currentlvalue, fop_Field, fop_subject));
                         instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
 
                         switch (pues.CSharpKind())
@@ -2594,24 +2633,33 @@ namespace LS2IL
                         }
 
 
-                        instructions.Add(FlatStatement.SETFIELD(fop_Field, fop_subject, fop_currentvalue));
+                        if (fs.IsStatic)
+                            instructions.Add(FlatStatement.SETSTATICFIELD(fop_Field, fop_currentvalue));
+                        else
+                            instructions.Add(FlatStatement.SETFIELD(fop_Field, fop_subject, fop_currentvalue));
                         return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                     }
                     break;
                 case SymbolKind.Property:
                     {
-                        fop_subject = ResolveParentExpression(si, pues.Operand, null,null, instructions);
-                        FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
+                        IPropertySymbol ps = (IPropertySymbol)si.Symbol;
+
+                        fop_subject = ResolveParentExpression(si, pues.Operand, null, null, instructions);
+                        FlatOperand fop_type;
+
+                        if (ps.IsStatic)
+                            fop_type = fop_subject;
+                        else
+                            fop_type = TypeOf(fop_subject, null, null, instructions);
 
                         FlatOperand fop_property;
                         ITypeSymbol typeSymbol;
                         {
-                            IPropertySymbol ps = (IPropertySymbol)si.Symbol;
 
-                            if (ps.IsStatic)
-                            {
-                                throw new NotImplementedException("static property assignment");
-                            }
+//                            if (ps.IsStatic)
+//                            {
+//                                throw new NotImplementedException("static property postfix unary assignment");
+//                            }
 
                             typeSymbol = ps.Type;
                             fop_property = Resolve(ps, fop_type, null, instructions);
@@ -2620,7 +2668,10 @@ namespace LS2IL
                         FlatOperand fop_currentvalue = this.AllocateRegister("");
                         FlatOperand fop_currentlvalue = fop_currentvalue.GetLValue(this, instructions);
 
-                        instructions.Add(FlatStatement.GETPROPERTY(fop_currentlvalue, fop_property, fop_subject));
+                        if (ps.IsStatic)
+                            instructions.Add(FlatStatement.GETSTATICPROPERTY(fop_currentlvalue, fop_property));
+                        else
+                            instructions.Add(FlatStatement.GETPROPERTY(fop_currentlvalue, fop_property, fop_subject));
                         instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
 
                         switch (pues.CSharpKind())
@@ -2632,9 +2683,10 @@ namespace LS2IL
                                 instructions.Add(FlatStatement.SUB(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int32(1))));
                                 break;
                         }
-
-
-                        instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_currentvalue));
+                        if (ps.IsStatic)
+                            instructions.Add(FlatStatement.SETSTATICPROPERTY(fop_property, fop_currentvalue));
+                        else
+                            instructions.Add(FlatStatement.SETPROPERTY(fop_property, fop_subject, fop_currentvalue));
                         return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                     }
                     break;
@@ -2655,14 +2707,10 @@ namespace LS2IL
                         }
                     }
                     break;
-                case SymbolKind.Parameter:
-                    {
-
-                    }
-                    break;
+                
             }
 
-            throw new NotImplementedException("postfix unary " + pues.CSharpKind().ToString());
+            throw new NotImplementedException("postfix unary " + pues.CSharpKind().ToString() + " - " + si.Symbol.Kind.ToString());
         }
 
         /// <summary>
@@ -3280,7 +3328,7 @@ namespace LS2IL
         public void Flatten(ForEachStatementSyntax node, List<FlatStatement> instructions)
         {
 			// foreach is unrolled by a rewriter. we should never get this.
-            throw new NotImplementedException("foreach");
+            throw new NotImplementedException("foreach is implemented via ForEachRewriter");
         }
 
         #endregion
