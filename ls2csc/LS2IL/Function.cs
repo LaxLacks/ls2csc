@@ -12,6 +12,29 @@ using System.Collections.Immutable;
 
 namespace LS2IL
 {
+    public class LS2ILGeneratorOptions
+    {
+        /// <summary>
+        /// Convert labels from meta-instructions into instruction numbers/spans
+        /// </summary>
+        public bool FlattenLabels { get; set; }
+
+        /// <summary>
+        /// Remove placeholder instructions, unused basic blocks, etc
+        /// </summary>
+        public bool FilterUnusedInstructions { get; set; }
+
+        /// <summary>
+        /// ls2csc generally uses SSA for register allocation, intending for them to be packed. disable only if needed to debug register allocation-related issues...
+        /// </summary>
+        public bool CondenseRegisters { get; set; }
+
+        /// <summary>
+        /// ls2il instructions are limited to 255 bytes in size, including the total binary size of each operand. for long literal strings and other lengthy operands, these should be promoted to a function value (or chunk value).
+        /// </summary>
+        public bool ElevateLongValues { get; set; }
+    }
+
     class Function
     {
         public Function(Chunk chunk, int nFunction, SemanticModel model, IMethodSymbol sym)
@@ -220,7 +243,7 @@ namespace LS2IL
                             int labelValue;
                             if (!EmittedLabels.TryGetValue(fop.ImmediateValue.ValueText, out labelValue))
                             {
-                                throw new NotImplementedException("Unresolved label " + fop.ImmediateValue.ValueText);
+                                throw new LS2ILLabelException("Unresolved label " + fop.ImmediateValue.ValueText);
                             }
 
                             switch (fs.Instruction)
@@ -240,7 +263,7 @@ namespace LS2IL
                                     fs.Operands[i] = fop.WithImmediateValue(FlatValue.Int32(labelValue - nInstructions));
                                     break;
                                 default:
-                                    throw new NotImplementedException("Label reference in instruction " + fs.Instruction.ToString());
+                                    throw new LS2ILLabelException("Label reference in instruction " + fs.Instruction.ToString());
                                     break;
                             }
 
@@ -250,14 +273,14 @@ namespace LS2IL
             }
         }
 
-        public void FlattenToInstructions(bool flattenLabels, bool bFilterUnusedInstructions, bool condenseRegisters, bool elevateLongValues)
+        public void FlattenToInstructions(LS2ILGeneratorOptions options)
         {
             List<FlatStatement> list = Flatten();
 
             ControlFlowGraph cfg = new ControlFlowGraph(this, list);
-            cfg.Build();
+            cfg.Build(options.FilterUnusedInstructions);
 
-            if (condenseRegisters)
+            if (options.CondenseRegisters)
             {
                 PackedRegisters = RegisterPackers.Pack(cfg);
             }
@@ -268,37 +291,39 @@ namespace LS2IL
 
             if (PackedRegisters > 256)
             {
-                throw new NotImplementedException("Too many registers used in function " + this.IMethodSymbol.GetFullyQualifiedName());
+                throw new NotSupportedException("Too many registers used in function " + this.IMethodSymbol.GetFullyQualifiedName());
             }
 
             list = cfg.Flatten();
-            
-            foreach(FlatStatement fs in list)
+            if (options.ElevateLongValues)
             {
-                if (fs.Operands == null)
-                    continue;
-
-                string emitted = fs.Emit();
-                if (emitted.Length < 192)
-                    continue;
-
-                // let's shorten this baby up.
-                for (int i = 0; i < fs.Operands.Count; i++ )
+                foreach (FlatStatement fs in list)
                 {
-                    FlatOperand fo = fs.Operands[i];
-                    if (fo.OperandType != FlatOperandType.OPND_IMMEDIATE)
+                    if (fs.Operands == null)
                         continue;
 
-                    if (fo.ImmediateValue.ToString().Length > 63)
+                    string emitted = fs.Emit();
+                    if (emitted.Length < 192)
+                        continue;
+
+                    // let's shorten this baby up.
+                    for (int i = 0; i < fs.Operands.Count; i++)
                     {
-                        int nValue = FunctionValues.Count;
-                        FunctionValues.Add(fo.ImmediateValue);
-                        fs.Operands[i] = FlatOperand.FunctionValueRef(nValue, fo.ImmediateValue);
+                        FlatOperand fo = fs.Operands[i];
+                        if (fo.OperandType != FlatOperandType.OPND_IMMEDIATE)
+                            continue;
+
+                        if (fo.ImmediateValue.ToString().Length > 63)
+                        {
+                            int nValue = FunctionValues.Count;
+                            FunctionValues.Add(fo.ImmediateValue);
+                            fs.Operands[i] = FlatOperand.FunctionValueRef(nValue, fo.ImmediateValue);
+                        }
                     }
                 }
             }
 
-            if (flattenLabels)
+            if (options.FlattenLabels)
             {
                 FlattenLabels(list);
 
@@ -311,7 +336,7 @@ namespace LS2IL
                         int labelValue;
                         if (!EmittedLabels.TryGetValue(fv.ValueText, out labelValue))
                         {
-                            throw new NotImplementedException("Unresolved label " + fv.ValueText);
+                            throw new LS2ILLabelException("Unresolved label " + fv.ValueText);
                         }
 
                         fv.ValueType = FlatValueType.VT_Int32;
@@ -331,7 +356,7 @@ namespace LS2IL
                 }
             }
 
-            if (flattenLabels)
+            if (options.FlattenLabels)
             {
                 foreach (FlatStatement fs in list)
                 {
@@ -532,7 +557,7 @@ namespace LS2IL
         {
             if (!(expression is IdentifierNameSyntax))
             {
-                throw new NotImplementedException("Parameter access that isn't an Identifier?");
+                throw new NotSupportedException("Parameter access that isn't an Identifier?");
 
             }
             IdentifierNameSyntax ins = (IdentifierNameSyntax)expression;
@@ -574,7 +599,7 @@ namespace LS2IL
                 nParameter++;
             }
 
-            throw new NotImplementedException("parameter '" + name + "' not found");
+            throw new LS2ILParameterException("parameter '" + name + "' not found");
         }
 
         public FlatOperand Resolve(IdentifierNameSyntax ins, TypeInfo result_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
@@ -647,7 +672,7 @@ namespace LS2IL
                             nParameter++;
                         }
 
-                        throw new NotImplementedException("parameter '"+name+"' not found");
+                        throw new LS2ILParameterException("parameter '" + name + "' not found");
                     }
                     break;
                 case SymbolKind.Field:
@@ -658,13 +683,13 @@ namespace LS2IL
                             TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
                             if (tei == null)
                             {
-                                throw new NotImplementedException("no TypeExtraInfo for field container type " + field.ContainingType.GetFullyQualifiedName());
+                                throw new LS2ILFieldException("no TypeExtraInfo for field container type " + field.ContainingType.GetFullyQualifiedName());
                             }
 
                             int nField;
                             if (!tei.ResolveLocalStaticField(field.Name, out nField))
                             {
-                                throw new NotImplementedException("field " + field.Name + " not found in type " + field.ContainingType.GetFullyQualifiedName());
+                                throw new LS2ILFieldException("field " + field.Name + " not found in type " + field.ContainingType.GetFullyQualifiedName());
                             }
 
                             FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
@@ -687,13 +712,13 @@ namespace LS2IL
                             TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
                             if (tei == null)
                             {
-                                throw new NotImplementedException("no TypeExtraInfo for field container type " + field.ContainingType.GetFullyQualifiedName());
+                                throw new LS2ILFieldException("no TypeExtraInfo for field container type " + field.ContainingType.GetFullyQualifiedName());
                             }
 
                             int nField;
                             if (!tei.ResolveRuntimeField(field.Name, out nField))
                             {
-                                throw new NotImplementedException("field " + field.Name + " not found in type " + field.ContainingType.GetFullyQualifiedName());
+                                throw new LS2ILFieldException("field " + field.Name + " not found in type " + field.ContainingType.GetFullyQualifiedName());
                             }
 
                             FlatValue retval = FlatValue.FromType(field.Type);
@@ -774,7 +799,7 @@ namespace LS2IL
             TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
             if (tei == null)
             {
-                throw new NotImplementedException("field of type without fields declarations? " + field.ContainingType.GetFullyQualifiedName());
+                throw new LS2ILFieldException("field of type without fields declarations? " + field.ContainingType.GetFullyQualifiedName());
             }
 
             if (tei.ResolveRuntimeField(field.Name, out nField))
@@ -795,7 +820,7 @@ namespace LS2IL
             TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
             if (tei == null)
             {
-                throw new NotImplementedException("field of type without fields declarations? " + field.ContainingType.GetFullyQualifiedName());
+                throw new LS2ILFieldException("field of type without fields declarations? " + field.ContainingType.GetFullyQualifiedName());
             }
 
             if (into_lvalue == null)
@@ -821,7 +846,7 @@ namespace LS2IL
                 instructions.Add(FlatStatement.RESOLVESTATICFIELD(into_lvalue, fop_type, FlatOperand.Immediate(FlatValue.String(field_name))));
                 return into_lvalue.AsRValue(FlatValue.FromType(field.Type));
             }
-            throw new NotImplementedException("missing field from type " + field.ContainingType.GetFullyQualifiedName());
+            throw new LS2ILFieldException("missing field from type " + field.ContainingType.GetFullyQualifiedName());
         }
 
         public FlatOperand Resolve(IPropertySymbol property, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
@@ -865,11 +890,12 @@ namespace LS2IL
 
             if (arg.NameColon != null)
             {
-                throw new NotImplementedException("name : value");
+                //throw new NotImplementedException("name : value");
+                throw new NotSupportedException("name : value syntax in BracketedArgumentListSyntax");
             }
             if (arg.RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
             {
-                throw new NotImplementedException("ref/out keyword");
+                throw new NotSupportedException("ref/out keyword in BracketedArgumentListSyntax");
             }
 
             FlatOperand opnd = ResolveExpression(arg.Expression, into_lvalue, instructions);
@@ -892,6 +918,7 @@ namespace LS2IL
             return list;
         }
 
+#if false
         public List<FlatOperand> ResolveArguments(ArgumentListSyntax args, List<FlatStatement> instructions)
         {
             List<FlatOperand> list = new List<FlatOperand>();
@@ -906,7 +933,7 @@ namespace LS2IL
 
             return list;
         }
-
+#endif
 
         public FlatOperand ResolveExpressionsToArray(IEnumerable<ExpressionSyntax> expressions, FlatOperand return_reference, FlatOperand into_lvalue, List<FlatStatement> instructions)
         {
@@ -1039,16 +1066,21 @@ namespace LS2IL
                     /**/
                     if (ars.NameColon != null)
                     {
-                        throw new NotImplementedException("name : value");
+                        allLiteral = false;
+                        break;
+                        //                      throw new NotImplementedException("name : value");
                     }
                     if (ars.RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
                     {
-                        throw new NotImplementedException("ref/out keywords");
+                        allLiteral = false;
+                        break;
+//                        throw new NotImplementedException("ref/out keywords in all-literal array");
                     }
 
                     if (!(ars.Expression is LiteralExpressionSyntax))
                     {
                         allLiteral = false;
+                        break;
                     }
                 }
 
@@ -1240,7 +1272,7 @@ namespace LS2IL
 
             if (si.Symbol.Kind != SymbolKind.Method)
             {
-                throw new NotImplementedException("new without Constructor method?");
+                throw new NotSupportedException("new without Constructor method?");
             }
 
             // NEW destination, type, arguments
@@ -1383,7 +1415,7 @@ namespace LS2IL
                         IMethodSymbol ms = ps.GetMethod;
                         if (ms == null)
                         {
-                            throw new NotImplementedException(ps.Name+" indexer has no get method?");
+                            throw new LS2ILMethodException(ps.Name+" indexer has no get method?");
                         }
 
                         
@@ -2959,7 +2991,7 @@ namespace LS2IL
             {
                 if (this.IMethodSymbol.ReturnsVoid)
                 {
-                    throw new NotImplementedException("returning a value from a void function");
+                    throw new NotSupportedException("returning a value from a void function");
                 }
 
                 FlatOperand fop_return = ResolveExpression(node.Expression, null, instructions);
@@ -3410,7 +3442,7 @@ namespace LS2IL
         public void Flatten(ForEachStatementSyntax node, List<FlatStatement> instructions)
         {
 			// foreach is unrolled by a rewriter. we should never get this.
-            throw new NotImplementedException("foreach is implemented via ForEachRewriter");
+            throw new NotSupportedException("foreach is implemented via ForEachRewriter; a foreach statement should not exist at this point");
         }
 
         #endregion
@@ -3763,7 +3795,7 @@ namespace LS2IL
                     int nRegister;
                     if (!CurrentVariableScope.Resolve(name, out nRegister))
                     {
-                        throw new NotImplementedException("Unresolved local symbol " + name);
+                        throw new NotSupportedException("Unresolved local symbol " + name);
                     }
                     FlatValue retval = FlatValue.Null();
                     fop_subjects.Add(FlatOperand.RegisterRef(nRegister, retval));

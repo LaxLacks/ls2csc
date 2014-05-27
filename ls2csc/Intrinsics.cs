@@ -112,15 +112,23 @@ namespace ls2csc
 
         public override FlatOperand Resolve(ExpressionSyntax expression, ArgumentListSyntax argumentList, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
         {
-            if (!(expression is MemberAccessExpressionSyntax))
+            FlatOperand fop_subject;
+            if (expression is IdentifierNameSyntax)
             {
-                throw new NotImplementedException("GetType not on MemberAccessExpressionSyntax");
+                // typeof this
+                fop_subject = FlatOperand.ThisRef(FlatValue.FromType(result_type.ConvertedType));
+            }
+            else if (expression is MemberAccessExpressionSyntax)
+            {
+                MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
+
+                fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
+            }
+            else
+            {
+                throw new NotImplementedException("GetType on expression type "+expression.GetType().ToString());
             }
 
-            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
-
-
-            FlatOperand fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
 
             if (into_lvalue == null)
             {
@@ -143,15 +151,23 @@ namespace ls2csc
 
         public override FlatOperand Resolve(ExpressionSyntax expression, ArgumentListSyntax argumentList, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
         {
-            if (!(expression is MemberAccessExpressionSyntax))
+            FlatOperand fop_subject;
+            if (expression is IdentifierNameSyntax)
             {
-                throw new NotImplementedException("ToString not on MemberAccessExpressionSyntax");
+                // typeof this
+                fop_subject = FlatOperand.ThisRef(FlatValue.FromType(result_type.ConvertedType));
+            }
+            else if (expression is MemberAccessExpressionSyntax)
+            {
+                MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
+
+                fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
+            }
+            else
+            {
+                throw new NotImplementedException("ToString on expression type " + expression.GetType().ToString());
             }
 
-            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
-
-
-            FlatOperand fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
 
             if (into_lvalue == null)
             {
@@ -174,15 +190,23 @@ namespace ls2csc
 
         public override FlatOperand Resolve(ExpressionSyntax expression, ArgumentListSyntax argumentList, TypeInfo result_type, SymbolInfo si, FlatOperand into_lvalue, Function function, List<FlatStatement> instructions)
         {
-            if (!(expression is MemberAccessExpressionSyntax))
+            FlatOperand fop_subject;
+            if (expression is IdentifierNameSyntax)
             {
-                throw new NotImplementedException("GetMetaTable not on MemberAccessExpressionSyntax");
+                // typeof this
+                fop_subject = FlatOperand.ThisRef(FlatValue.FromType(result_type.ConvertedType));
+            }
+            else if (expression is MemberAccessExpressionSyntax)
+            {
+                MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
+
+                fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
+            }
+            else
+            {
+                throw new NotImplementedException("GetMetaTable on expression type " + expression.GetType().ToString());
             }
 
-            MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)expression;
-
-
-            FlatOperand fop_subject = function.ResolveExpression(meas.Expression, null, instructions);
 
             if (into_lvalue == null)
             {

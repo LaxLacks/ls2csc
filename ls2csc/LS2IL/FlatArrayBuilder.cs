@@ -35,7 +35,7 @@ namespace LS2IL
                     int labelValue;
                     if (!function.EmittedLabels.TryGetValue(fv.ValueText, out labelValue))
                     {
-                        throw new NotImplementedException("Unresolved label " + fv.ValueText);
+                        throw new LS2ILLabelException("Unresolved label " + fv.ValueText);
                     }
                     
                     Values[i] = FlatValue.Int32(labelValue);
@@ -127,7 +127,7 @@ namespace LS2IL
                     int labelValue;
                     if (!function.EmittedLabels.TryGetValue(fv.ValueText, out labelValue))
                     {
-                        throw new NotImplementedException("Unresolved label " + fv.ValueText);
+                        throw new LS2ILLabelException("Unresolved label " + fv.ValueText);
                     }
 
                     fv.ValueType = FlatValueType.VT_Int32;

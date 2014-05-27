@@ -199,7 +199,7 @@ namespace LS2IL
                         break;
                     case Instruction.LEAVE:
                         // end basic block; exiting to do finally->endfinally. LEAVE should not exist yet at this point unless we are re-graphing...
-                        throw new NotImplementedException("");
+                        throw new NotSupportedException("LEAVE");
                         break;
                     case Instruction.ENDFINALLY:
                         // end basic block; jumping back to LEAVE+1
@@ -221,7 +221,7 @@ namespace LS2IL
         /// <summary>
         /// Builds the graph of BasicBlocks and all successors and predecessors
         /// </summary>
-        public void Build()
+        public void Build(bool removeUnusedBlocks)
         {           
             // first, build the basic blocks.
             BuildBasicBlocks();
@@ -233,7 +233,10 @@ namespace LS2IL
             GraphSuccessors();
 
             // Pare the graph of any BasicBlock with no Predecessors (and is also not the first BasicBlock)
-            PareGraph();
+            if (removeUnusedBlocks)
+            {
+                PareGraph();
+            }
         }
 
         /// <summary>
@@ -914,7 +917,7 @@ namespace LS2IL
                 }
             }
             else
-                throw new NotImplementedException("ENDFINALLY missing FinallyLabel?");
+                throw new LS2ILLabelException("ENDFINALLY missing FinallyLabel?");
         }
 
         void AddSuccessorByLeave()

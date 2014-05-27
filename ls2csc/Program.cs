@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using LS2IL;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using NDesk.Options;
@@ -446,7 +447,10 @@ namespace ls2csctest
                     dc.Visit(root);
                 }
 
-                chunk.Emit(output);
+                // TODO: command-line options for these flags
+                LS2ILGeneratorOptions options = new LS2ILGeneratorOptions() { CondenseRegisters = true, ElevateLongValues = true, FilterUnusedInstructions = true, FlattenLabels = true };
+
+                chunk.Emit(options, output);
                 output.WriteLine("");
                 #endregion
 

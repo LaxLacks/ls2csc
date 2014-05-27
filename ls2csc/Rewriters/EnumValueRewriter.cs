@@ -40,7 +40,7 @@ namespace ls2csc
                     return node;
                 }
 
-                throw new NotImplementedException("enum with non-literal explicit value");
+                throw new NotSupportedException("enum with non-literal explicit value");
             }
 
             return base.VisitEnumMemberDeclaration(node);

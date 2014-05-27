@@ -250,7 +250,7 @@ namespace LS2IL
                 case SpecialType.None:
                     return FlatValueType.VT_Object;
             }
-            throw new NotImplementedException("special type" + type.SpecialType.ToString());
+            throw new NotImplementedException("FlatValueType for special type" + type.SpecialType.ToString());
             
         }
 

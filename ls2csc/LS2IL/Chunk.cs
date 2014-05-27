@@ -12,6 +12,48 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LS2IL
 {
+    public class LS2ILException : Exception
+    {
+        public LS2ILException(string message) : base(message)
+        {
+
+        }
+    }
+
+    public class LS2ILLabelException : LS2ILException
+    {
+        public LS2ILLabelException(string message): base(message)
+        {
+
+        }
+    }
+
+    public class LS2ILMethodException : LS2ILException
+    {
+        public LS2ILMethodException(string message):base(message)
+        {
+
+        }
+    }
+
+    public class LS2ILParameterException : LS2ILException
+    {
+        public LS2ILParameterException(string message)
+            : base(message)
+        {
+
+        }
+    }
+
+    public class LS2ILFieldException : LS2ILException
+    {
+        public LS2ILFieldException(string message)
+            : base(message)
+        {
+
+        }
+    }
+
     class Chunk
     {
         public const string LS2ILVersion = "0.10.20140522.1";
@@ -186,7 +228,7 @@ namespace LS2IL
         /// Emits the Chunk to output in LS2IL
         /// </summary>
         /// <param name="output"></param>
-        public void Emit(TextWriter output)
+        public void Emit(LS2ILGeneratorOptions options, TextWriter output)
         {
             output.WriteLine("; ---- begin chunk ----");
 
@@ -199,7 +241,7 @@ namespace LS2IL
                 Function fEntryPoint;
                 if (!Functions.TryGetValue(entryPoint, out fEntryPoint))
                 {
-                    throw new NotImplementedException("Entry point function not built");
+                    throw new NotSupportedException("Entry point function not built");
                 }
 
                 output.WriteLine(".entry " + fEntryPoint.NumFunction);
@@ -209,8 +251,7 @@ namespace LS2IL
             {
                 LS2IL.Function f = FunctionsByNumber[i];
                 
-                // TODO: command-line options for these 3 flags
-                f.FlattenToInstructions(true, true, true, true);
+                f.FlattenToInstructions(options);
             }
 
             GenerateTypesMetadata();

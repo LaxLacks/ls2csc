@@ -135,7 +135,7 @@ namespace ls2csc
             IPropertySymbol ps = (IPropertySymbol)si.Symbol;
             if (ps.IsStatic)
             {
-                throw new NotImplementedException("static indexer?");
+                throw new NotSupportedException("static indexer?");
             }            
                                 
             //SyntaxFactory.MemberAccessExpression(SyntaxKind.IdentifierName)

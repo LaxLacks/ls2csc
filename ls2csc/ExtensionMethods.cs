@@ -22,7 +22,7 @@ namespace LS2IL
         public static string GetFullyQualifiedName(this IMethodSymbol obj)
         {
             if (string.IsNullOrEmpty(obj.Name))
-                throw new NotImplementedException("method has no name");
+                throw new NotSupportedException("method has no name");
 
             string parameters = "{";
             int nParams = obj.Parameters.Count();
@@ -74,7 +74,7 @@ namespace LS2IL
                     return "System.Array";
                 }
                 else
-                    throw new NotImplementedException("un-named ITypeSymbol");
+                    throw new NotSupportedException("un-named ITypeSymbol");
             }
             string parentname = string.Empty;
 

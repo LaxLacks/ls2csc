@@ -108,7 +108,7 @@ namespace LS2IL
                 Function f;
                 if (!Chunk.Functions.TryGetValue(ms, out f))
                 {
-                    throw new NotImplementedException("Method not found " + ms.ToString());
+                    throw new LS2ILMethodException("Method not found " + ms.ToString());
                 }
 
                 fab.Add(FlatValue.Int32(f.NumFunction));
@@ -174,7 +174,7 @@ namespace LS2IL
                                 msGet = Model.GetDeclaredSymbol(ads);
                                 if (!Chunk.Functions.TryGetValue(msGet, out fGet))
                                 {
-                                    throw new NotImplementedException("Method not found " + msGet.ToString());
+                                    throw new LS2ILMethodException("Method not found " + msGet.ToString());
                                 }
                                 sGet = /*"get_" +*/ msGet.GetFullyQualifiedName();
                             }
@@ -184,7 +184,7 @@ namespace LS2IL
                                 msSet = Model.GetDeclaredSymbol(ads);
                                 if (!Chunk.Functions.TryGetValue(msSet, out fSet))
                                 {
-                                    throw new NotImplementedException("Method not found " + msSet.ToString());
+                                    throw new LS2ILMethodException("Method not found " + msSet.ToString());
                                 }
                                 sSet = /*"set_" +*/ msSet.GetFullyQualifiedName();
                             }
@@ -205,7 +205,7 @@ namespace LS2IL
                     Function f;
                     if (!Chunk.Functions.TryGetValue(msGet, out f))
                     {
-                        throw new NotImplementedException("Method not found " + msGet.ToString());
+                        throw new LS2ILMethodException("Method not found " + msGet.ToString());
                     }
 
                     fab.Add(FlatValue.Int32(f.NumFunction));
@@ -224,7 +224,7 @@ namespace LS2IL
                     Function f;
                     if (!Chunk.Functions.TryGetValue(msSet, out f))
                     {
-                        throw new NotImplementedException("Method not found " + msGet.ToString());
+                        throw new LS2ILMethodException("Method not found " + msGet.ToString());
                     }
 
                     fab.Add(FlatValue.Int32(f.NumFunction));
@@ -287,12 +287,12 @@ namespace LS2IL
                         }
                         else
                         {
-                            throw new NotImplementedException("Enum member without numeric literal expression");
+                            throw new NotSupportedException("Enum member without numeric literal expression. Enum members are implemented by EnumValueRewriter; this should not exist at this point");
                         }
                     }
                     else
                     {
-                        throw new NotImplementedException("Enum member without numeric literal expression");
+                        throw new NotSupportedException("Enum member without numeric literal expression. Enum members are implemented by EnumValueRewriter; this should not exist at this point");
                     }
 
                     fab.Add(valueList.GetFlatValue());
@@ -362,7 +362,7 @@ namespace LS2IL
                                 IMethodSymbol ms = Model.GetDeclaredSymbol(ads);
                                 if (!Chunk.Functions.TryGetValue(ms, out fGet))
                                 {
-                                    throw new NotImplementedException("Method not found " + ms.ToString());
+                                    throw new LS2ILMethodException("Method not found " + ms.ToString());
                                 }
                             }
                             break;
@@ -371,7 +371,7 @@ namespace LS2IL
                                 IMethodSymbol ms = Model.GetDeclaredSymbol(ads);
                                 if (!Chunk.Functions.TryGetValue(ms, out fSet))
                                 {
-                                    throw new NotImplementedException("Method not found " + ms.ToString());
+                                    throw new LS2ILMethodException("Method not found " + ms.ToString());
                                 }
                             }
                             break;
@@ -433,7 +433,7 @@ namespace LS2IL
                 Function f;
                 if (!Chunk.Functions.TryGetValue(ms, out f))
                 {
-                    throw new NotImplementedException("Method not found " + ms.ToString());
+                    throw new LS2ILMethodException("Method not found " + ms.ToString());
                 }
 
                 fab.Add(FlatValue.Int32(f.NumFunction));
@@ -620,7 +620,7 @@ namespace LS2IL
         {
             if (vds.ArgumentList != null)
             {
-                throw new NotImplementedException("array field");
+                throw new NotImplementedException("VariableDeclaratorSyntax with ArgumentList");
             }
 
             //bool bStatic = false;

@@ -171,7 +171,7 @@ namespace ls2csc
                                 int nTargetInstruction;
                                 if (!Labels.TryGetValue(fs.Operands[0].ImmediateValue.ValueText, out nTargetInstruction))
                                 {
-                                    throw new NotImplementedException("Unknown jump target label " + fs.Operands[0].ImmediateValue.ValueText);
+                                    throw new LS2ILLabelException("Unknown jump target label " + fs.Operands[0].ImmediateValue.ValueText);
                                 }
 
                                 if (nTargetInstruction <= CurrentState.NumInstruction)
@@ -189,14 +189,14 @@ namespace ls2csc
                                 {
                                     if (!Labels.TryGetValue(CurrentState.ehEndLabel, out nEndInstruction))
                                     {
-                                        throw new NotImplementedException("Unknown exception handler end label " + CurrentState.ehEndLabel);
+                                        throw new LS2ILLabelException("Unknown exception handler end label " + CurrentState.ehEndLabel);
                                     }
                                 }
                                 else
                                 {
                                     if (!Labels.TryGetValue(CurrentState.FinallyLabel, out nEndInstruction))
                                     {
-                                        throw new NotImplementedException("Unknown finally target label " + CurrentState.FinallyLabel);
+                                        throw new LS2ILLabelException("Unknown finally target label " + CurrentState.FinallyLabel);
                                     }
                                 }
 
