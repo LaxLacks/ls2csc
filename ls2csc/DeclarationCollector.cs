@@ -51,6 +51,19 @@ namespace ls2csc
             CurrentClass = wasClass;
         }
 
+        public override void VisitDelegateDeclaration(DelegateDeclarationSyntax node)
+        {
+            LS2IL.TypeExtraInfo.ClassMetadataGenerator wasClass = CurrentClass;
+
+            INamedTypeSymbol s = Model.GetDeclaredSymbol(node);
+            //System.Console.WriteLine(s.GetFullyQualifiedName());
+            TypeExtraInfo tei = Chunk.AddTypeExtraInfo(s, Model, IsLibrary);
+            CurrentClass = tei.MetadataGenerator;
+            
+            base.VisitDelegateDeclaration(node);
+            CurrentClass = wasClass;            
+        }
+
         #region unused declarations
         public override void VisitAccessorDeclaration(AccessorDeclarationSyntax node)
         {
@@ -70,11 +83,6 @@ namespace ls2csc
         public override void VisitDestructorDeclaration(DestructorDeclarationSyntax node)
         {
             base.VisitDestructorDeclaration(node);
-        }
-
-        public override void VisitDelegateDeclaration(DelegateDeclarationSyntax node)
-        {
-            base.VisitDelegateDeclaration(node);
         }
 
         public override void VisitEventDeclaration(EventDeclarationSyntax node)

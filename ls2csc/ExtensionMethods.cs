@@ -24,6 +24,21 @@ namespace LS2IL
             if (string.IsNullOrEmpty(obj.Name))
                 throw new NotSupportedException("method has no name");
 
+            string typeParameters = string.Empty;
+            int nTypeParams = obj.TypeParameters.Count();
+            if (nTypeParams>0)
+            {
+                typeParameters += "<";
+                for (int nTypeParam = 0 ; nTypeParam < nTypeParams ; nTypeParam++)
+                {
+                    if (nTypeParam > 0)
+                        typeParameters += ",";
+
+                    typeParameters += obj.TypeParameters[nTypeParam].GetFullyQualifiedName();
+                }
+                typeParameters += ">";
+            }
+
             string parameters = "{";
             int nParams = obj.Parameters.Count();
             for (int nParam = 0 ; nParam< nParams ; nParam++)
@@ -36,7 +51,7 @@ namespace LS2IL
             }
             parameters += "}";
             
-            return obj.Name + parameters;
+            return obj.Name + typeParameters + parameters;
         }
 
         /// <summary>
@@ -83,10 +98,27 @@ namespace LS2IL
             else if (obj.ContainingNamespace!=null)
                 parentname = GetFullyQualifiedName(obj.ContainingNamespace);
 
-            if (!string.IsNullOrEmpty(parentname))
-                return parentname + "." + obj.Name;
+            /*
+            string typeParameters = string.Empty;
+            int nTypeParams = obj.Count();
+            if (nTypeParams > 0)
+            {
+                typeParameters += "<";
+                for (int nTypeParam = 0; nTypeParam < nTypeParams; nTypeParam++)
+                {
+                    if (nTypeParam > 0)
+                        typeParameters += ",";
 
-            return "LazyProgrammer." + obj.Name;
+                    typeParameters += obj.TypeParameters[nTypeParam].GetFullyQualifiedName();
+                }
+                typeParameters += ">";
+            }
+             */
+
+            if (!string.IsNullOrEmpty(parentname))
+                return parentname + "." + obj.MetadataName;
+
+            return "LazyProgrammer." + obj.MetadataName;
         }
 
         /// <summary>

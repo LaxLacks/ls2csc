@@ -301,6 +301,61 @@ namespace LS2IL
                 Members.Add(fab.GetFlatValue());
             }
 
+            public void Add(EventFieldDeclarationSyntax node)
+            {
+                /*
+           // Summary:
+           //     Gets the attribute declaration list.
+           public override SyntaxList<AttributeListSyntax> AttributeLists { get; }
+           public override VariableDeclarationSyntax Declaration { get; }
+           public SyntaxToken EventKeyword { get; }
+           //
+           // Summary:
+           //     Gets the modifier list.
+           public override SyntaxTokenList Modifiers { get; }
+           public override SyntaxToken SemicolonToken { get; }
+                 */
+                // add field info
+                Add(node.Modifiers, node.Declaration);
+
+
+                /*
+        // Summary:
+        //     Gets the attribute declaration list.
+        public override SyntaxList<AttributeListSyntax> AttributeLists { get; }
+        public override VariableDeclarationSyntax Declaration { get; }
+        //
+        // Summary:
+        //     Gets the modifier list.
+        public override SyntaxTokenList Modifiers { get; }
+        public override SyntaxToken SemicolonToken { get; }                 
+                 */
+
+                // add to metadata for runtime type building
+                FlatArrayBuilder fab = new FlatArrayBuilder();
+
+                fab.Add(FlatValue.Int32(node.Modifiers.ToString().Contains("static") ? (int)ClassMemberType.StaticField : (int)ClassMemberType.Field));
+                TypeInfo ti = Model.GetTypeInfo(node.Declaration.Type);
+                fab.Add(FlatValue.String(ti.ConvertedType.GetFullyQualifiedName()));
+
+                {
+                    FlatArrayBuilder varList = new FlatArrayBuilder();
+                    foreach (VariableDeclaratorSyntax vds in node.Declaration.Variables)
+                    {
+                        if (vds.ArgumentList != null)
+                        {
+                            throw new NotImplementedException("VariableDeclaratorSyntax with ArgumentList");
+                        }
+                        varList.Add(FlatValue.String(vds.Identifier.ToString()));
+                    }
+
+
+                    fab.Add(varList.GetFlatValue());
+                }
+
+                Members.Add(fab.GetFlatValue());
+            }
+
             public void Add(FieldDeclarationSyntax node)
             {
                 // add field info
@@ -459,6 +514,12 @@ namespace LS2IL
                             return;
                         }
                         break;
+                    case SyntaxKind.EventFieldDeclaration:
+                        {
+                            Add((EventFieldDeclarationSyntax)node);
+                            return;
+                        }
+                        break;
                     case SyntaxKind.PropertyDeclaration:
                         {
                             Add((PropertyDeclarationSyntax)node);
@@ -496,7 +557,7 @@ namespace LS2IL
                         }
                         break;
                 }
-                throw new NotImplementedException();
+                throw new NotImplementedException(node.CSharpKind().ToString());
             }
 
             public new FlatValue GetFlatValue()

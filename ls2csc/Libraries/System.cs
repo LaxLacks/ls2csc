@@ -131,6 +131,10 @@ namespace System
     {
     }
 
+    public struct IntPtr
+    {
+    }
+
     public struct Char
     {
     }

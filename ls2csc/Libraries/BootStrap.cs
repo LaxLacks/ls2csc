@@ -32,6 +32,20 @@ namespace System
         /**/
     }
 
+    public abstract class Delegate
+    {
+        //protected Delegate(Object target,string method);
+        //protected Delegate(Type target, string method);
+    }
+
+    public abstract class MulticastDelegate : Delegate
+    {
+
+    }
+
+    public delegate void EventHandler(Object sender,EventArgs e);
+    public delegate void EventHandler<TEventArgs>(Object sender,TEventArgs e);
+
     public class EventArgs
     {
         public EventArgs()

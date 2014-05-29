@@ -623,6 +623,15 @@ namespace LS2IL
             return new FlatStatement(Instruction.NEWARRAY, lvalue, size, fop_type);
         }
 
+        public static FlatStatement NEWDELEGATE(FlatOperand lvalue, FlatOperand type, FlatOperand array_with_method_and_optional_type)
+        {
+            if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
+            {
+                throw new NotSupportedException("expected register number (LValue) in left");
+            }
+            return new FlatStatement(Instruction.NEWDELEGATE, lvalue, type, array_with_method_and_optional_type);
+        }
+
         public static FlatStatement NEWOBJECT(FlatOperand lvalue, FlatOperand constructor, FlatOperand arguments)
         {
             if (lvalue.OperandType != FlatOperandType.OPND_IMMEDIATE)
@@ -823,6 +832,9 @@ namespace LS2IL
         ARRAYGET,
         ARRAYRESIZE,
         ARRAYCONCAT,
+
+        // delegate stuff
+        NEWDELEGATE,
 
         // object stuff
         NEWOBJECT,

@@ -609,6 +609,63 @@ namespace LS2IL
             string name = ins.Identifier.ToString();
             switch (si.Symbol.Kind)
             {
+                case SymbolKind.Event:
+                    {
+                        if (si.Symbol.IsStatic)
+                        {
+                            IEventSymbol field = (IEventSymbol)si.Symbol;
+                            TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
+                            if (tei == null)
+                            {
+                                throw new LS2ILFieldException("no TypeExtraInfo for field container type " + field.ContainingType.GetFullyQualifiedName());
+                            }
+
+                            int nField;
+                            if (!tei.ResolveLocalStaticField(field.Name, out nField))
+                            {
+                                throw new LS2ILFieldException("field " + field.Name + " not found in type " + field.ContainingType.GetFullyQualifiedName());
+                            }
+
+                            FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
+                            FlatOperand fop_field = Resolve((IFieldSymbol)si.Symbol, fop_type, null, instructions);
+
+
+                            if (into_lvalue == null)
+                            {
+                                FlatOperand register_fop = AllocateRegister("");
+                                into_lvalue = register_fop.GetLValue(this, instructions);
+                            }
+
+                            instructions.Add(FlatStatement.GETSTATICFIELD(into_lvalue, fop_field));
+                            return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+
+                        }
+                        else
+                        {
+                            IEventSymbol field = (IEventSymbol)si.Symbol;
+                            TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
+                            if (tei == null)
+                            {
+                                throw new LS2ILFieldException("no TypeExtraInfo for field container type " + field.ContainingType.GetFullyQualifiedName());
+                            }
+
+                            int nField;
+                            if (!tei.ResolveRuntimeField(field.Name, out nField))
+                            {
+                                throw new LS2ILFieldException("field " + field.Name + " not found in type " + field.ContainingType.GetFullyQualifiedName());
+                            }
+
+                            FlatValue retval = FlatValue.FromType(field.Type);
+                            FlatOperand retop = FlatOperand.FieldRef(nField, retval);
+
+                            if (into_lvalue != null)
+                            {
+                                instructions.Add(FlatStatement.REFERENCE(into_lvalue, retop));
+                            }
+                            return retop;
+                        }
+                    }
+                    break;
                 case SymbolKind.NamedType:
                     {
                         FlatOperand fop_type = Resolve((ITypeSymbol)si.Symbol, into_lvalue, instructions);
@@ -767,6 +824,12 @@ namespace LS2IL
                         }
                     }
                     break;
+                case SymbolKind.Method:
+                    {
+                        FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
+                        return Resolve((IMethodSymbol)si.Symbol, fop_type, into_lvalue, instructions);
+                    }
+                    break;
             }
 
             throw new NotImplementedException(si.Symbol.Kind.ToString());
@@ -782,8 +845,8 @@ namespace LS2IL
                 into_lvalue = register_fop.GetLValue(this, instructions);
             }
 
-            FlatOperand fop_methodname = FlatOperand.Immediate(FlatValue.String(method_name));
-
+            FlatOperand fop_methodname;
+            fop_methodname = FlatOperand.Immediate(FlatValue.String(method_name));
             if (method.IsStatic)
             {
                 instructions.Add(FlatStatement.RESOLVESTATICMETHOD(into_lvalue,fop_type,fop_methodname));
@@ -811,6 +874,42 @@ namespace LS2IL
                 return true;
             }
             return false;
+        }
+
+        public FlatOperand Resolve(IEventSymbol field, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
+        {
+            string field_name = field.Name;
+
+            TypeExtraInfo tei = Chunk.GetTypeExtraInfo(field.ContainingType);
+            if (tei == null)
+            {
+                throw new LS2ILFieldException("field of type without fields declarations? " + field.ContainingType.GetFullyQualifiedName());
+            }
+
+            if (into_lvalue == null)
+            {
+                into_lvalue = AllocateRegister("");
+                into_lvalue = into_lvalue.GetLValue(this, instructions);
+            }
+
+            int nTypeField;
+            int nField;
+            if (!field.IsStatic)
+            {
+                if (tei.FieldNames.TryGetValue(field_name, out nTypeField) && tei.ResolveLocalField(field_name, out nField))
+                {
+                    FieldExtraInfo fei = tei.Fields[nTypeField];
+                    instructions.Add(FlatStatement.RESOLVEFIELD(into_lvalue, fop_type, FlatOperand.Immediate(FlatValue.Int32(nField))));
+                    return into_lvalue.AsRValue(FlatValue.FromType(field.Type));
+                }
+            }
+            else
+            {
+                // static field
+                instructions.Add(FlatStatement.RESOLVESTATICFIELD(into_lvalue, fop_type, FlatOperand.Immediate(FlatValue.String(field_name))));
+                return into_lvalue.AsRValue(FlatValue.FromType(field.Type));
+            }
+            throw new LS2ILFieldException("missing field from type " + field.ContainingType.GetFullyQualifiedName());
         }
 
         public FlatOperand Resolve(IFieldSymbol field, FlatOperand fop_type, FlatOperand into_lvalue, List<FlatStatement> instructions)
@@ -1267,67 +1366,108 @@ namespace LS2IL
         public TypeSyntax Type { get; }
              */
             TypeInfo ti = Model.GetTypeInfo(node);
-           
-            SymbolInfo si = Model.GetSymbolInfo(node);
 
-            if (si.Symbol.Kind != SymbolKind.Method)
+            if (ti.Type.TypeKind == TypeKind.Delegate)
             {
-                throw new NotSupportedException("new without Constructor method?");
-            }
-
-            // NEW destination, type, arguments
-            if (into_lvalue == null)
-            {
-                FlatOperand register_fop = AllocateRegister("");
-                into_lvalue = register_fop.GetLValue(this, instructions);
-            }
-            
-            FlatOperand fop_type = Resolve(ti.ConvertedType,null,instructions);
-
-            if (si.Symbol.IsImplicitlyDeclared)
-            {
-                Chunk.AddFunction((IMethodSymbol)si.Symbol, Model);
-            }
-
-            FlatOperand fop_constructor = Resolve((IMethodSymbol)si.Symbol,fop_type,null,instructions);
-
-            List<ReferencedArgument> references = null;
-            FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList,null,null, out references, instructions);
-
-
-
-            instructions.Add(FlatStatement.NEWOBJECT(into_lvalue, fop_constructor, fop_args));
-
-            DereferenceArgumentsAfterCall(references, instructions);
-
-            FlatOperand fop_rvalue = into_lvalue.AsRValue(FlatValue.FromType(ti.ConvertedType));
-
-            if (node.Initializer != null)
-            {
-               // throw new NotImplementedException("new with initializer");
-
-                // apply statements from the initializer.
-                foreach(ExpressionSyntax es in node.Initializer.Expressions)
+                // NEW destination, type, arguments
+                if (into_lvalue == null)
                 {
-                    if (es is BinaryExpressionSyntax)
-                    {
-                        BinaryExpressionSyntax bes = (BinaryExpressionSyntax)es;
-                        ResolveExpression(bes, result_type, null, fop_rvalue, instructions);
-                    }
-                    else
-                    {
-                        ResolveExpression(es, null, instructions);
-                    }
-                    /*
-                    if (node.IsAssignment())
-                    {
-                        return ResolveAssignmentExpression(node, result_type, into_lvalue, null, instructions);
-                    }
-                    /**/
+                    FlatOperand register_fop = AllocateRegister("");
+                    into_lvalue = register_fop.GetLValue(this, instructions);
                 }
+
+                FlatOperand fop_type = Resolve(ti.ConvertedType, null, instructions);
+
+                FlatOperand arrayregister_fop = AllocateRegister("");
+                FlatOperand array_lvalue = arrayregister_fop.GetLValue(this, instructions);
+
+                FlatValue literalArray = new FlatValue(FlatValueType.VT_Array, "{ }", null);
+                instructions.Add(FlatStatement.DUPLICATE(array_lvalue, FlatOperand.Immediate(literalArray)));
+
+                ExpressionSyntax expr = node.ArgumentList.Arguments[0].Expression;
+
+                SymbolInfo si = Model.GetSymbolInfo(expr);
+                if (si.Symbol.Kind != SymbolKind.Method)
+                {
+                    throw new NotSupportedException("Non-method delegate construction");
+                }
+
+                FlatOperand fop_method = ResolveExpression(expr, null, instructions);
+                instructions.Add(FlatStatement.ADD(array_lvalue, arrayregister_fop, fop_method));
+
+                if (!si.Symbol.IsStatic)
+                {
+                    FlatOperand fop_subject = ResolveParentExpression(si,expr,null,null,instructions);
+
+                    instructions.Add(FlatStatement.ADD(array_lvalue, arrayregister_fop, fop_subject));
+                }
+
+                instructions.Add(FlatStatement.NEWDELEGATE(into_lvalue, fop_type, arrayregister_fop));
+
+                FlatOperand fop_rvalue = into_lvalue.AsRValue(FlatValue.FromType(ti.ConvertedType));
+                return fop_rvalue;
             }
 
-            return fop_rvalue;
+            {
+                SymbolInfo si = Model.GetSymbolInfo(node);
+
+                if (si.Symbol.Kind != SymbolKind.Method)
+                {
+                    throw new NotSupportedException("new without Constructor method?");
+                }
+                // NEW destination, type, arguments
+                if (into_lvalue == null)
+                {
+                    FlatOperand register_fop = AllocateRegister("");
+                    into_lvalue = register_fop.GetLValue(this, instructions);
+                }
+
+                FlatOperand fop_type = Resolve(ti.ConvertedType, null, instructions);
+
+                if (si.Symbol.IsImplicitlyDeclared)
+                {
+                    Chunk.AddFunction((IMethodSymbol)si.Symbol, Model);
+                }
+
+                FlatOperand fop_constructor = Resolve((IMethodSymbol)si.Symbol, fop_type, null, instructions);
+
+                List<ReferencedArgument> references = null;
+                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, null, null, out references, instructions);
+
+
+
+                instructions.Add(FlatStatement.NEWOBJECT(into_lvalue, fop_constructor, fop_args));
+
+                DereferenceArgumentsAfterCall(references, instructions);
+
+                FlatOperand fop_rvalue = into_lvalue.AsRValue(FlatValue.FromType(ti.ConvertedType));
+
+                if (node.Initializer != null)
+                {
+                    // throw new NotImplementedException("new with initializer");
+
+                    // apply statements from the initializer.
+                    foreach (ExpressionSyntax es in node.Initializer.Expressions)
+                    {
+                        if (es is BinaryExpressionSyntax)
+                        {
+                            BinaryExpressionSyntax bes = (BinaryExpressionSyntax)es;
+                            ResolveExpression(bes, result_type, null, fop_rvalue, instructions);
+                        }
+                        else
+                        {
+                            ResolveExpression(es, null, instructions);
+                        }
+                        /*
+                        if (node.IsAssignment())
+                        {
+                            return ResolveAssignmentExpression(node, result_type, into_lvalue, null, instructions);
+                        }
+                        /**/
+                    }
+                }
+                return fop_rvalue;
+            }
         }
 
         public ImmutableArray<IMethodSymbol> GetPropertyMethods(ImmutableArray<IPropertySymbol> properties)
@@ -1553,6 +1693,45 @@ namespace LS2IL
                         }
                     }
                     break;
+                case SymbolKind.Event:
+                    {
+
+                        IEventSymbol field = (IEventSymbol)si.Symbol;
+
+                        if (si.Symbol.IsStatic)
+                        {
+                            FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
+                            FlatOperand fop_field = Resolve(field, fop_type, null, instructions);
+
+                            if (into_lvalue == null)
+                            {
+                                FlatOperand register_fop = AllocateRegister("");
+                                into_lvalue = register_fop.GetLValue(this, instructions);
+                            }
+
+                            instructions.Add(FlatStatement.GETSTATICFIELD(into_lvalue, fop_field));
+                            return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+
+                        }
+
+                        {
+                            FlatOperand fop_subject = ResolveExpression(node.Expression, null, instructions);
+                            FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
+
+                            FlatOperand fop_field = Resolve(field, fop_type, null, instructions);
+
+                            if (into_lvalue == null)
+                            {
+                                FlatOperand register_fop = AllocateRegister("");
+                                into_lvalue = register_fop.GetLValue(this, instructions);
+                            }
+
+                            instructions.Add(FlatStatement.GETFIELD(into_lvalue, fop_field, fop_subject));
+                            return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
+                        }
+ 
+                    }
+                    break;
                 case SymbolKind.Field:
                     {
 
@@ -1624,10 +1803,18 @@ namespace LS2IL
                 //nFirstArg = 1;
             }
 
-            if (method.IsStatic)
+            if (method.IsStatic || method.MethodKind == MethodKind.DelegateInvoke)
             {
-                FlatOperand fop_type = Resolve(method.ContainingType, null, instructions);
-                FlatOperand fop_method = Resolve(method, fop_type, null, instructions);
+                FlatOperand fop_method;
+                if (method.MethodKind == MethodKind.DelegateInvoke)
+                {
+                    fop_method = ResolveExpression(expression, null, instructions);
+                }
+                else
+                {
+                    FlatOperand fop_type = Resolve(method.ContainingType, null, instructions);
+                    fop_method = Resolve(method, fop_type, null, instructions);
+                }
                 // 1. RESOLVETYPE               
 
                 switch (nArgs)
@@ -1896,291 +2083,6 @@ namespace LS2IL
 
             IMethodSymbol method = (IMethodSymbol)si.Symbol;
             return Resolve(si,method, node.Expression, node.ArgumentList, result_type, into_lvalue, instructions);
-
-            // check for intrinsics
-            
-            string intrinsic;
-            if (method.GetIntrinsic(out intrinsic))
-            {
-                var im = ls2csc.Intrinsics.ResolveMethod(intrinsic);
-                if (im == null)
-                {
-                    throw new NotImplementedException("Unhandled intrinsic method "+intrinsic);
-                }
-                return im.Resolve(node.Expression,node.ArgumentList,result_type,si,into_lvalue,this,instructions);
-            }
-            
-
-
-
-            ArgumentListSyntax args = node.ArgumentList;
-            
-            int nArgs = args.Arguments.Count;
-            //int nFirstArg = 0;
-            if (!method.ReturnsVoid)
-            {
-                nArgs++;
-                //nFirstArg = 1;
-            }
-
-            if (si.Symbol.IsStatic)
-            {
-                FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
-                FlatOperand fop_method = Resolve(method, fop_type, null, instructions);
-                // 1. RESOLVETYPE               
-
-                switch (nArgs)
-                {
-                    case 0:
-                        {
-                            instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method));
-                            return FlatOperand.LiteralNull();
-                        }
-                        break;
-                    case 1:
-                        {
-                            if (!method.ReturnsVoid)
-                            {
-                                FlatOperand fop_return = AllocateRegister("");
-
-                                FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
-                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
-                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, fop_return));
-                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
-
-                                if (into_lvalue == null)
-                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
-                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
-                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
-                            }
-
-
-                            FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
-                            FlatOperand input0_use = input0_fop;
-                            FlatOperand input0_reference = null;
-
-                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                            {
-                                input0_reference = AllocateRegister("");
-                                instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
-                                input0_use = input0_reference;
-                            }
-
-                            instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, input0_use));
-                            if (input0_reference != null)
-                                instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
-                            return FlatOperand.LiteralNull();
-                        }
-                        break;
-                    case 2:
-                        {
-                            if (!method.ReturnsVoid)
-                            {
-                                FlatOperand fop_return = AllocateRegister("");
-
-                                FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
-                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
-
-                                FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
-                                FlatOperand input0_use = input0_fop;
-                                FlatOperand input0_reference = null;
-
-                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                                {
-                                    input0_reference = AllocateRegister("");
-                                    instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
-                                    input0_use = input0_reference;
-                                }
-                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, fop_return, input0_use));
-                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
-
-                                if (into_lvalue == null)
-                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
-                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
-                                if (input0_reference != null)
-                                    instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
-                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
-                            }
-                            {
-                                FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
-                                FlatOperand input0_use = input0_fop;
-                                FlatOperand input0_reference = null;
-
-                                if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                                {
-                                    input0_reference = AllocateRegister("");
-                                    instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
-                                    input0_use = input0_reference;
-                                }
-
-                                FlatOperand input1_fop = ResolveExpression(args.Arguments[1].Expression, null, instructions);
-                                FlatOperand input1_use = input1_fop;
-                                FlatOperand input1_reference = null;
-
-                                if (args.Arguments[1].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                                {
-                                    input1_reference = AllocateRegister("");
-                                    instructions.Add(FlatStatement.REREFERENCE(input1_reference.GetLValue(this, instructions), input1_fop));
-                                    input1_use = input1_reference;
-                                }
-                                instructions.Add(FlatStatement.FASTCALLSTATICMETHOD(fop_method, input0_use, input1_use));
-
-                                if (input0_reference != null)
-                                    instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
-                                if (input1_reference != null)
-                                    instructions.Add(FlatStatement.DEREFERENCE(input1_fop.GetLValue(this, instructions), input1_reference));
-                                
-                                return FlatOperand.LiteralNull();
-                            }
-                        }
-                        break;
-                    default:
-                        {
-
-                            if (!method.ReturnsVoid)
-                            {
-                                FlatOperand fop_return = AllocateRegister("");
-
-                                FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
-                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
-
-                                List<ReferencedArgument> references = null;
-                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, fop_return, null, out references,instructions);
-
-                                instructions.Add(FlatStatement.CALLSTATICMETHOD(fop_method, fop_args));
-                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
-
-                                if (into_lvalue == null)
-                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
-                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
-                                DereferenceArgumentsAfterCall(references, instructions);
-                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
-                            }
-                            /**/
-
-                            {
-                                List<ReferencedArgument> references = null;
-                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, null, null, out references, instructions);
-                                {
-                                    instructions.Add(FlatStatement.CALLSTATICMETHOD(fop_method, fop_args));
-                                    DereferenceArgumentsAfterCall(references, instructions);
-                                    return FlatOperand.LiteralNull();
-                                }
-                            }
-                        }
-                        break;
-                }
-
-            }
-
-            FlatOperand fop_subject;
-            if (node.Expression is MemberAccessExpressionSyntax)
-            {
-                MemberAccessExpressionSyntax meas = (MemberAccessExpressionSyntax)node.Expression;
-                fop_subject = ResolveExpression(meas.Expression, null, instructions);
-            }
-            else
-            {
-                // implied "this"
-                fop_subject = FlatOperand.ThisRef(FlatValue.FromType(si.Symbol.ContainingType));
-            }
-
-            {
-
-
-                
-                FlatOperand fop_type = TypeOf(fop_subject,null, null, instructions);
-
-                FlatOperand fop_method = Resolve(method, fop_type, null, instructions);
-
-                // non-static method            
-                // 1. RESOLVETYPE               
-                    // FASTCALL
-                switch (nArgs)
-                {
-                    case 0:
-                        {
-                            instructions.Add(FlatStatement.FASTCALLMETHOD(fop_method, fop_subject));
-                            return FlatOperand.LiteralNull();
-                        }
-                        break;
-                    case 1:
-                        {
-                            if (!method.ReturnsVoid)
-                            {
-                                FlatOperand fop_return = AllocateRegister("");
-
-                                FlatOperand lvalue_return = fop_return.GetLValue(this,instructions);
-                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return,FlatOperand.LiteralNull()));
-                                instructions.Add(FlatStatement.FASTCALLMETHOD(fop_method, fop_subject, fop_return));
-                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
-
-                                if (into_lvalue == null)
-                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
-                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
-                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
-                            }
-
-                            FlatOperand input0_fop = ResolveExpression(args.Arguments[0].Expression, null, instructions);
-                            FlatOperand input0_use = input0_fop;
-                            FlatOperand input0_reference = null;
-
-                            if (args.Arguments[0].RefOrOutKeyword.CSharpKind() != SyntaxKind.None)
-                            {
-                                input0_reference = AllocateRegister("");
-                                instructions.Add(FlatStatement.REREFERENCE(input0_reference.GetLValue(this, instructions), input0_fop));
-                                input0_use = input0_reference;
-                            }
-
-                            instructions.Add(FlatStatement.FASTCALLMETHOD(fop_method, fop_subject, input0_use));
-
-                            if (input0_reference!=null)
-                                instructions.Add(FlatStatement.DEREFERENCE(input0_fop.GetLValue(this, instructions), input0_reference));
-
-                            return FlatOperand.LiteralNull();
-                        }
-                        break;
-                    default:
-                        {
-
-                            if (!method.ReturnsVoid)
-                            {
-                                FlatOperand fop_return = AllocateRegister("");
-
-                                FlatOperand lvalue_return = fop_return.GetLValue(this, instructions);
-                                instructions.Add(FlatStatement.REREFERENCE(lvalue_return, FlatOperand.LiteralNull()));
-
-                                List<ReferencedArgument> references = null;
-                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, fop_return, null, out references, instructions);
-
-                                instructions.Add(FlatStatement.CALLMETHOD(fop_method, fop_subject, fop_args));
-                                FlatOperand rvalue_return = lvalue_return.AsRValue(FlatValue.Null());
-
-                                if (into_lvalue == null)
-                                    into_lvalue = AllocateRegister("").GetLValue(this, instructions);
-                                instructions.Add(FlatStatement.DEREFERENCE(into_lvalue, rvalue_return));
-                                DereferenceArgumentsAfterCall(references, instructions);
-                                return into_lvalue.AsRValue(rvalue_return.ImmediateValue);
-                            }
-                            /**/
-
-                            {
-                                List<ReferencedArgument> references = null;
-                                FlatOperand fop_args = ResolveArgumentsToArray(node.ArgumentList, null, null,out references, instructions);
-                                {
-                                    instructions.Add(FlatStatement.CALLMETHOD(fop_method, fop_subject, fop_args));
-                                    DereferenceArgumentsAfterCall(references, instructions);
-                                    return FlatOperand.LiteralNull();
-                                }
-                            }
-                        }
-
-                        break;
-                }
-            }
-            /**/
-
-            throw new NotImplementedException();
         }
 
         public FlatOperand ResolveLValue(ExpressionSyntax expr, List<FlatStatement> instructions)
@@ -2306,6 +2208,7 @@ namespace LS2IL
                 IdentifierNameSyntax ins = (IdentifierNameSyntax)sn;
                 switch (si.Symbol.Kind)
                 {
+                    case SymbolKind.Event:
                     case SymbolKind.Field:
                         {
                             // it's a field, with no member access
@@ -2359,8 +2262,42 @@ namespace LS2IL
                             }
                             return FlatOperand.ThisRef(val);
                         }
+                    case SymbolKind.Method:
+                        {
+                            // it's a method, with no member access
+                            if (si.Symbol.IsStatic)
+                            {
+                                return Resolve(si.Symbol.ContainingType, into_lvalue, instructions);
+                            }
+                            // and it's not static.
+
+                            if (parent_op != null)
+                            {
+                                if (into_lvalue != null)
+                                {
+                                    instructions.Add(FlatStatement.REFERENCE(into_lvalue, parent_op));
+                                }
+                                return parent_op;
+                            }
+
+                            // is it a delegate?
+                            IMethodSymbol ms = (IMethodSymbol)si.Symbol;
+                            if (ms.MethodKind == MethodKind.DelegateInvoke)
+                            {
+                                throw new NotImplementedException("DelegateInvoke");
+                            }
+
+                            // must be from "this".
+                            FlatValue val = FlatValue.FromType(si.Symbol.ContainingType);
+                            if (into_lvalue != null)
+                            {
+                                instructions.Add(FlatStatement.REFERENCE(into_lvalue, FlatOperand.ThisRef(val)));
+                                return into_lvalue.AsRValue(val);
+                            }
+                            return FlatOperand.ThisRef(val);
+                        }
                     default:
-                        throw new NotImplementedException();
+                        throw new NotImplementedException(si.Symbol.Kind.ToString());
                         break;
                 }
             }
@@ -2393,6 +2330,60 @@ namespace LS2IL
             SymbolInfo si = Model.GetSymbolInfo(node.Left);
             switch (si.Symbol.Kind)
             {
+                case SymbolKind.Event:
+                    {
+                        fop_subject = ResolveParentExpression(si, node.Left, null, parent_op, instructions);
+                        fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
+                            //TypeOf(fop_subject, null, null, instructions);
+
+                        FlatOperand fop_Field;
+                       // ITypeSymbol typeSymbol;
+                        IEventSymbol ps = (IEventSymbol)si.Symbol;
+                        {
+                            /*
+                            if (ps.IsStatic)
+                            {
+                                fop_Field = Resolve(ps, fop_type, null, instructions);
+                            }
+                            else/**/
+                            {
+                                //typeSymbol = ps.Type;
+                                fop_Field = Resolve(ps, fop_type, null, instructions);
+                            }
+                        }
+
+                        FlatOperand fop_right = ResolveExpression(node.Right, into_lvalue, instructions);
+
+                        if (node.CSharpKind() == SyntaxKind.SimpleAssignmentExpression)
+                        {
+                            fop_result = fop_right;
+                        }
+                        else
+                        {
+                            fop_result = AllocateRegister("");
+                            lvalue_result = fop_result.GetLValue(this, instructions);
+                            if (ps.IsStatic)
+                            {
+                                instructions.Add(FlatStatement.GETSTATICFIELD(lvalue_result, fop_Field));
+                            }
+                            else
+                            {
+                                instructions.Add(FlatStatement.GETFIELD(lvalue_result, fop_Field, fop_subject));
+                            }
+                            ResolveBinaryExpression(node.CSharpKind(), fop_result, fop_right, lvalue_result, instructions);
+                        }
+
+                        if (ps.IsStatic)
+                        {
+                            instructions.Add(FlatStatement.SETSTATICFIELD(fop_Field, fop_result));
+                        }
+                        else
+                        {
+                            instructions.Add(FlatStatement.SETFIELD(fop_Field, fop_subject, fop_result));
+                        }
+                        return fop_result;
+                    }
+                    break;
                 case SymbolKind.Field:
                     {
                         fop_subject = ResolveParentExpression(si, node.Left, null, parent_op, instructions);
@@ -2710,6 +2701,48 @@ namespace LS2IL
                             return fop_subject;
                         }
                          */
+                    }
+                    break;
+                case SymbolKind.Event:
+                    {
+                        IEventSymbol fs = (IEventSymbol)si.Symbol;
+                        fop_subject = ResolveParentExpression(si, pues.Operand, null, null, instructions);
+                        //FlatOperand fop_type = TypeOf(fop_subject, null, null, instructions);
+                        FlatOperand fop_type = Resolve(si.Symbol.ContainingType, null, instructions);
+
+                        FlatOperand fop_Field;
+                        ITypeSymbol typeSymbol;
+                        {
+
+                            typeSymbol = fs.Type;
+                            fop_Field = Resolve(fs, fop_type, null, instructions);
+                        }
+
+                        FlatOperand fop_currentvalue = this.AllocateRegister("");
+                        FlatOperand fop_currentlvalue = fop_currentvalue.GetLValue(this, instructions);
+
+                        if (fs.IsStatic)
+                            instructions.Add(FlatStatement.GETSTATICFIELD(fop_currentlvalue, fop_Field));
+                        else
+                            instructions.Add(FlatStatement.GETFIELD(fop_currentlvalue, fop_Field, fop_subject));
+                        instructions.Add(FlatStatement.DUPLICATE(into_lvalue, fop_currentvalue));
+
+                        switch (pues.CSharpKind())
+                        {
+                            case SyntaxKind.PostIncrementExpression:
+                                instructions.Add(FlatStatement.ADD(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                break;
+                            case SyntaxKind.PostDecrementExpression:
+                                instructions.Add(FlatStatement.SUB(fop_currentlvalue, fop_currentvalue, FlatOperand.Immediate(FlatValue.Int32(1))));
+                                break;
+                        }
+
+
+                        if (fs.IsStatic)
+                            instructions.Add(FlatStatement.SETSTATICFIELD(fop_Field, fop_currentvalue));
+                        else
+                            instructions.Add(FlatStatement.SETFIELD(fop_Field, fop_subject, fop_currentvalue));
+                        return into_lvalue.AsRValue(FlatValue.FromType(result_type.ConvertedType));
                     }
                     break;
                 case SymbolKind.Field:
